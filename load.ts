@@ -26,7 +26,7 @@ export class Loader {
   }
 
   rest(): Uint8Array {
-    return this.#buf.slice(this.#pos);
+    return this.#buf.subarray(this.#pos);
   }
 
   readTopLevel(): RObject {
