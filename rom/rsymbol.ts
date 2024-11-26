@@ -1,5 +1,5 @@
-import { REncoding, US_ASCII, UTF_8 } from "./rom/encoding/mod.ts";
-import { WeakValueMap } from "./weak-value-map.ts";
+import { REncoding, US_ASCII, UTF_8 } from "./encoding/mod.ts";
+import { WeakValueMap } from "../weak-value-map.ts";
 
 export type RSymbol = string | RExoticSymbol;
 

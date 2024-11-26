@@ -3,8 +3,8 @@ import {
   assertInstanceOf,
   assertStrictEquals,
 } from "@std/assert";
+import { findEncoding } from "./encoding/mod.ts";
 import { RExoticSymbol, RSymbol } from "./rsymbol.ts";
-import { findEncoding } from "./rom/encoding/mod.ts";
 
 const sjis = findEncoding("Windows-31J")!;
 
