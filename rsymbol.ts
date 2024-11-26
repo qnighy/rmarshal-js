@@ -46,9 +46,10 @@ RSymbol.encodingOf = (symbol: RSymbol): REncoding => {
 const PRIVATE_KEY: unknown = {};
 
 export class RExoticSymbol {
-  #bytes: Uint8Array;
-  #encoding: REncoding;
-  #internKey: string;
+  // Using Array rather than Uint8Array so that
+  // it can be frozen.
+  readonly bytes: readonly number[];
+  readonly encoding: REncoding;
   static #internMap = new WeakValueMap<string, RExoticSymbol>();
   constructor(
     privateKey: unknown,
@@ -58,23 +59,22 @@ export class RExoticSymbol {
     if (privateKey !== PRIVATE_KEY) {
       throw new TypeError("Do not instantiate RExoticSymbol directly");
     }
-    bytes = new Uint8Array(bytes);
-    this.#bytes = bytes;
-    this.#encoding = encoding;
-    this.#internKey = encoding.name + "\n" + String.fromCharCode(...bytes);
-    const interned = RExoticSymbol.#internMap.get(this.#internKey);
+
+    const copiedBytes = Object.freeze(Array.from(bytes));
+    this.bytes = copiedBytes;
+    this.encoding = encoding;
+    Object.freeze(this);
+
+    const internKey = encoding.name + "\n" +
+      String.fromCharCode(...copiedBytes);
+    const interned = RExoticSymbol.#internMap.get(internKey);
     if (interned) {
       return interned;
     }
-    RExoticSymbol.#internMap.set(this.#internKey, this);
-    Object.freeze(this);
-  }
-
-  get encoding(): REncoding {
-    return this.#encoding;
+    RExoticSymbol.#internMap.set(internKey, this);
   }
 
   toString(): string {
-    return this.#encoding.inspectBytes(this.#bytes);
+    return this.encoding.inspectBytes(Uint8Array.from(this.bytes));
   }
 }
