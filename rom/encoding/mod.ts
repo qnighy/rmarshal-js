@@ -104,3 +104,6 @@ const encodings: Map<string, REncoding> = (() => {
 export function findEncoding(name: string): REncoding | undefined {
   return encodings.get(name.toLowerCase());
 }
+
+export const UTF_8 = findEncoding("UTF-8")!;
+export const US_ASCII = findEncoding("US-ASCII")!;
