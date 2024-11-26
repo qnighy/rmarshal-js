@@ -1,4 +1,4 @@
-import { type EncodingImpl, EncodingRegistration } from "../common.ts";
+import { type EncodingImpl, EncodingRegistration } from "../common-internal.ts";
 
 const US_ASCII_IMPL: EncodingImpl = {
   delimit(bytes, pos) {
