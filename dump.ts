@@ -41,10 +41,33 @@ class Dumper {
         this.#writeByte(0x69); // 'i'
         this.#writeFixnum(Number(value));
       } else {
-        throw new Error(`TODO: BigInt`);
+        this.#writeByte(0x6C); // 'l'
+        this.#writeBignum(value);
       }
     } else {
       throw new TypeError(`Unsupported type: ${typeof value}`);
+    }
+  }
+
+  #writeBignum(value: bigint) {
+    if (value >= 0n) {
+      this.#writeByte(0x2B); // '+'
+    } else {
+      this.#writeByte(0x2D); // '-'
+      value = -value;
+    }
+    let numWords = 0;
+    {
+      let current = value;
+      while (current > 0n) {
+        numWords++;
+        current >>= 16n;
+      }
+    }
+    this.#writeFixnum(numWords);
+    for (let i = 0; i < numWords * 2; i++) {
+      this.#writeByte(Number(value & 0xFFn));
+      value >>= 8n;
     }
   }
 

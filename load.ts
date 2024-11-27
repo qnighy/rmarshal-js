@@ -51,11 +51,40 @@ export class Loader {
         return true;
       case 0x69: // 'i'
         return BigInt(this.#readFixnum());
+      case 0x6C: // 'l'
+        return this.#readBignum();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
         );
     }
+  }
+
+  #readBignum(): bigint {
+    const signByte = this.#readByte();
+    if (signByte !== 0x2B && signByte !== 0x2D) {
+      throw new SyntaxError("Invalid Bignum sign byte");
+    }
+    const numWords = this.#readUFixnum();
+    let value = 0n;
+    for (let i = 0; i < numWords * 2; i++) {
+      value |= BigInt(this.#readByte()) << (BigInt(i) * 8n);
+    }
+    if (signByte !== 0x2D) {
+      if (value < 0x40000000n) {
+        throw new SyntaxError("Incorrect Fixnum representation as Bignum");
+      } else if (value < (1n << (BigInt(numWords - 1) * 16n))) {
+        throw new SyntaxError("Non-canonical Bignum representation");
+      }
+    } else {
+      value = -value;
+      if (value >= -0x40000000n) {
+        throw new SyntaxError("Incorrect Fixnum representation as Bignum");
+      } else if (value > -(1n << (BigInt(numWords - 1) * 16n))) {
+        throw new SyntaxError("Non-canonical Bignum representation");
+      }
+    }
+    return value;
   }
 
   #readUFixnum(): number {
