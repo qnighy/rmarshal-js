@@ -45,6 +45,10 @@ export class Loader {
     switch (type) {
       case 0x30: // '0'
         return null;
+      case 0x46: // 'F'
+        return false;
+      case 0x54: // 'T'
+        return true;
       case 0x69: // 'i'
         return BigInt(this.#readFixnum());
       default:

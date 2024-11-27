@@ -22,6 +22,15 @@ Deno.test("load rejects invalid versions", () => {
   assertEquals(l([0x04, 0x07, 0x30]), null);
 });
 
+Deno.test("load loads nil", () => {
+  assertEquals(l([0x04, 0x08, 0x30]), null);
+});
+
+Deno.test("load loads boolean", () => {
+  assertEquals(l([0x04, 0x08, 0x46]), false);
+  assertEquals(l([0x04, 0x08, 0x54]), true);
+});
+
 Deno.test("load loads Fixnum", () => {
   // Zero
   assertEquals(l([0x04, 0x08, 0x69, 0x00]), 0n);

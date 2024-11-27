@@ -34,6 +34,8 @@ class Dumper {
   #writeObject(value: RObject) {
     if (value === null) {
       this.#writeByte(0x30); // '0'
+    } else if (typeof value === "boolean") {
+      this.#writeByte(value ? 0x54 : 0x46); // 'T' or 'F'
     } else if (typeof value === "bigint") {
       if (-0x40000000n <= value && value < 0x40000000n) {
         this.#writeByte(0x69); // 'i'

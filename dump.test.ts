@@ -10,6 +10,11 @@ Deno.test("dump dumps nil", () => {
   assertEquals(d(null), [0x04, 0x08, 0x30]);
 });
 
+Deno.test("dump dumps boolean", () => {
+  assertEquals(d(false), [0x04, 0x08, 0x46]);
+  assertEquals(d(true), [0x04, 0x08, 0x54]);
+});
+
 Deno.test("dump dumps Fixnum", () => {
   // Zero
   assertEquals(d(0n), [0x04, 0x08, 0x69, 0x00]);
