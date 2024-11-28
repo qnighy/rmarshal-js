@@ -379,10 +379,6 @@ Deno.test("dump dumps Float", () => {
 
 Deno.test("dump dumps Symbol", () => {
   assertEquals(d("foo"), [0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]);
-  // assertEquals(
-  //   l([0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82]),
-  //   RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
-  // );
   assertEquals(
     d(RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
       encoding: ASCII_8BIT,
@@ -407,6 +403,7 @@ Deno.test("dump dumps Symbol", () => {
       0x54,
     ],
   );
+  // // TODO
   // assertEquals(
   //   d(RSymbol(Uint8Array.from([0x82, 0xA0]), {
   //     encoding: findEncoding("Windows-31J")!,
