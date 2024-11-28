@@ -44,6 +44,9 @@ class Dumper {
         this.#writeByte(0x6C); // 'l'
         this.#writeBignum(value);
       }
+    } else if (typeof value === "number") {
+      this.#writeByte(0x66); // 'f'
+      this.#writeFloat(value);
     } else {
       throw new TypeError(`Unsupported type: ${typeof value}`);
     }
@@ -69,6 +72,19 @@ class Dumper {
       this.#writeByte(Number(value & 0xFFn));
       value >>= 8n;
     }
+  }
+
+  #writeFloat(value: number) {
+    const text = printNumber(value);
+    const bytes = new TextEncoder().encode(text);
+    this.#writeBytes(bytes);
+  }
+
+  #writeBytes(bytes: Uint8Array) {
+    this.#writeFixnum(bytes.length);
+    this.#reserve(this.#pos + bytes.length);
+    this.#buf.set(bytes, this.#pos);
+    this.#pos += bytes.length;
   }
 
   #writeFixnum(value: number) {
@@ -141,6 +157,42 @@ class Dumper {
       const newBuf = new Uint8Array(newCap);
       newBuf.set(this.#buf);
       this.#buf = newBuf;
+    }
+  }
+}
+
+function printNumber(value: number): string {
+  if (Number.isNaN(value)) {
+    return "nan";
+  } else if (value === Infinity) {
+    return "inf";
+  } else if (value === -Infinity) {
+    return "-inf";
+  } else if (value === 0) {
+    return Object.is(value, -0) ? "-0" : "0";
+  }
+
+  const signPart = value < 0 ? "-" : "";
+  const [fracPointText, expText] = Math.abs(value).toExponential().split("e");
+  const exp = Number(expText);
+  const frac = fracPointText.replace(".", "");
+
+  if (exp + 1 === frac.length) {
+    // Integral representation
+    return signPart + frac;
+  } else if (exp + 1 < frac.length && exp >= -4) {
+    // Fractional non-scientific representation
+    if (exp < 0) {
+      return signPart + "0." + "0".repeat(-exp - 1) + frac;
+    } else {
+      return signPart + frac.slice(0, exp + 1) + "." + frac.slice(exp + 1);
+    }
+  } else {
+    // Scientific representation, but uses "e" for "e+"
+    if (frac.length > 1) {
+      return signPart + frac[0] + "." + frac.slice(1) + "e" + exp;
+    } else {
+      return signPart + frac + "e" + exp;
     }
   }
 }

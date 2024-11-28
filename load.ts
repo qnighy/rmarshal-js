@@ -53,6 +53,8 @@ export class Loader {
         return BigInt(this.#readFixnum());
       case 0x6C: // 'l'
         return this.#readBignum();
+      case 0x66: // 'f'
+        return this.#readFloat();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
@@ -85,6 +87,37 @@ export class Loader {
       }
     }
     return value;
+  }
+
+  #readFloat(): number {
+    const text = new TextDecoder().decode(this.#readByteSlice());
+    switch (text) {
+      case "nan":
+        return NaN;
+      case "inf":
+        return Infinity;
+      case "-inf":
+        return -Infinity;
+    }
+    if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:e-?[1-9][0-9]*)?$/.test(text)) {
+      return Number(text);
+    } else if (
+      /^[+\-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+\-]?[0-9]+)?$/.test(text)
+    ) {
+      throw new SyntaxError("Noncanonical Float format");
+    } else {
+      throw new SyntaxError("Invalid Float format");
+    }
+  }
+
+  #readByteSlice(): Uint8Array {
+    const length = this.#readUFixnum();
+    if (this.#pos + length > this.#buf.length) {
+      throw new SyntaxError("Unexpected end of input");
+    }
+    const slice = this.#buf.subarray(this.#pos, this.#pos + length);
+    this.#pos += length;
+    return slice;
   }
 
   #readUFixnum(): number {
