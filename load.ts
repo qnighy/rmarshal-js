@@ -11,7 +11,13 @@ export function load(buf: Uint8Array): RObject {
   }
   return value;
 }
-export function loadStream(buf: Uint8Array): [RObject, Uint8Array] {
+export function* loadStream(buf: Uint8Array): IterableIterator<RObject> {
+  const loader = new Loader(buf);
+  while (loader.hasRest()) {
+    yield loader.readTopLevel();
+  }
+}
+export function loadNext(buf: Uint8Array): [RObject, Uint8Array] {
   const loader = new Loader(buf);
   const value = loader.readTopLevel();
   return [value, loader.rest()];
@@ -23,6 +29,10 @@ export class Loader {
 
   constructor(buf: Uint8Array) {
     this.#buf = buf;
+  }
+
+  hasRest(): boolean {
+    return this.#pos < this.#buf.length;
   }
 
   rest(): Uint8Array {
