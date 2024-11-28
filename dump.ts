@@ -1,4 +1,11 @@
-import type { RObject } from "./rom.ts";
+import {
+  ASCII_8BIT,
+  RExoticSymbol,
+  type RObject,
+  RSymbol,
+  US_ASCII,
+  UTF_8,
+} from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -47,6 +54,10 @@ class Dumper {
     } else if (typeof value === "number") {
       this.#writeByte(0x66); // 'f'
       this.#writeFloat(value);
+    } else if (typeof value === "string") {
+      this.#writeSymbolObject(value);
+    } else if (value instanceof RExoticSymbol) {
+      this.#writeSymbolObject(value);
     } else {
       throw new TypeError(`Unsupported type: ${typeof value}`);
     }
@@ -78,6 +89,29 @@ class Dumper {
     const text = printNumber(value);
     const bytes = new TextEncoder().encode(text);
     this.#writeBytes(bytes);
+  }
+
+  #writeSymbolObject(value: RSymbol) {
+    const encoding = RSymbol.encodingOf(value);
+    const bytes = typeof value === "string"
+      ? new TextEncoder().encode(value)
+      : Uint8Array.from(value.bytes);
+    if (encoding === US_ASCII || encoding === ASCII_8BIT) {
+      this.#writeByte(0x3A); // ':'
+      this.#writeBytes(bytes);
+    } else {
+      this.#writeByte(0x49); // 'I'
+      this.#writeByte(0x3A); // ':'
+      this.#writeBytes(bytes);
+      this.#writeFixnum(1);
+      if (encoding === UTF_8) {
+        this.#writeSymbolObject("E");
+        this.#writeByte(0x54); // 'T'
+      } else {
+        this.#writeSymbolObject("encoding");
+        throw new Error("TODO: exotic enodings");
+      }
+    }
   }
 
   #writeBytes(bytes: Uint8Array) {

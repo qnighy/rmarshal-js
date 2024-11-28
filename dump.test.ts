@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import type { RObject } from "./rom.ts";
+import { ASCII_8BIT, findEncoding, type RObject, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 
 function d(obj: RObject): number[] {
@@ -375,4 +375,69 @@ Deno.test("dump dumps Float", () => {
     0x32,
     0x34,
   ]);
+});
+
+Deno.test("dump dumps Symbol", () => {
+  assertEquals(d("foo"), [0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]);
+  // assertEquals(
+  //   l([0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82]),
+  //   RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
+  // );
+  assertEquals(
+    d(RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
+      encoding: ASCII_8BIT,
+    })),
+    [0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82],
+  );
+  assertEquals(
+    d("あ"),
+    [
+      0x04,
+      0x08,
+      0x49,
+      0x3A,
+      0x08,
+      0xE3,
+      0x81,
+      0x82,
+      0x06,
+      0x3A,
+      0x06,
+      0x45,
+      0x54,
+    ],
+  );
+  // assertEquals(
+  //   d(RSymbol(Uint8Array.from([0x82, 0xA0]), {
+  //     encoding: findEncoding("Windows-31J")!,
+  //   })),
+  //   [
+  //     0x04,
+  //     0x08,
+  //     0x49,
+  //     0x3A,
+  //     0x07,
+  //     0x65,
+  //     0x6E,
+  //     0x63,
+  //     0x6F,
+  //     0x64,
+  //     0x69,
+  //     0x6E,
+  //     0x67,
+  //     0x22,
+  //     0x10,
+  //     0x57,
+  //     0x69,
+  //     0x6E,
+  //     0x64,
+  //     0x6F,
+  //     0x77,
+  //     0x73,
+  //     0x2D,
+  //     0x33,
+  //     0x31,
+  //     0x4A,
+  //   ],
+  // );
 });

@@ -1,4 +1,11 @@
-import { type RObject } from "./rom.ts";
+import {
+  ASCII_8BIT,
+  findEncoding,
+  REncoding,
+  type RObject,
+  RSymbol,
+  UTF_8,
+} from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -65,10 +72,89 @@ export class Loader {
         return this.#readBignum();
       case 0x66: // 'f'
         return this.#readFloat();
+      case 0x3A: // ':'
+        return this.#readSymbol(false);
+      case 0x49: // 'I'
+        return this.#readObjectWithIvars();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
         );
+    }
+  }
+
+  #readObjectWithIvars(): RObject {
+    const type = this.#readByte();
+    switch (type) {
+      case 0x3A: // ':'
+        return this.#readSymbol(true);
+      case 0x49: // 'I'
+        throw new SyntaxError("Nested instance variable container");
+      default:
+        return Loader.#rejectUnsupportedType(
+          type,
+          "cannot have instance variables",
+        );
+    }
+  }
+
+  #readKey(): RSymbol {
+    const type = this.#readByte();
+    switch (type) {
+      case 0x3A: // ':'
+        return this.#readSymbol(false);
+      case 0x49: { // 'I'
+        const subtype = this.#readByte();
+        switch (subtype) {
+          case 0x3A: // ':'
+            return this.#readSymbol(true);
+          case 0x49: // 'I'
+            throw new SyntaxError("Nested instance variable container");
+          default:
+            return Loader.#rejectUnsupportedType(
+              subtype,
+              "cannot be an instance variable key",
+            );
+        }
+      }
+      default:
+        return Loader.#rejectUnsupportedType(
+          type,
+          "cannot be an instance variable key",
+        );
+    }
+  }
+
+  static #rejectUnsupportedType(type: number, msg: string): never {
+    const desc = Loader.#typeDescription(type);
+    if (desc !== null) {
+      throw new SyntaxError(`${desc} ${msg}`);
+    }
+    throw new SyntaxError(
+      `Unknown type: ${
+        type.toString(16).padStart(2, "0").toUpperCase()
+      } ${msg}`,
+    );
+  }
+
+  static #typeDescription(type: number): string | undefined {
+    switch (type) {
+      case 0x30: // '0'
+        return "nil";
+      case 0x46: // 'F'
+        return "false";
+      case 0x54: // 'T'
+        return "true";
+      case 0x69: // 'i'
+        return "Integer (Fixnum)";
+      case 0x6C: // 'l'
+        return "Integer (Bignum)";
+      case 0x66: // 'f'
+        return "Float";
+      case 0x3A: // ':'
+        return "Symbol";
+      case 0x49: // 'I'
+        return "Instance variable container";
     }
   }
 
@@ -118,6 +204,57 @@ export class Loader {
     } else {
       throw new SyntaxError("Invalid Float format");
     }
+  }
+
+  #readSymbol(hasIvar: boolean): RSymbol {
+    const bytes = this.#readByteSlice();
+    if (!hasIvar) {
+      return RSymbol(bytes, { encoding: ASCII_8BIT });
+    }
+    const numIvars = this.#readUFixnum();
+    if (numIvars !== 1) {
+      throw new SyntaxError(
+        "Complex symbol must have exactly one instance variable",
+      );
+    }
+    const key = this.#readKey();
+    const value = this.#readObject();
+    let encoding: REncoding;
+    switch (key) {
+      case "E":
+        // Short encoding form
+        if (value === true) {
+          encoding = UTF_8;
+        } else if (value === false) {
+          throw new SyntaxError("Redundant US-ASCII specifier in Symbol");
+        } else {
+          throw new SyntaxError("Invalid short encoding specifier in Symbol");
+        }
+        break;
+      case "encoding":
+        throw Error("TODO: Symbol with encoding");
+        // // Long encoding form
+        // if (typeof value === "string") {
+        //   const maybeEncoding = findEncoding(value);
+        //   if (maybeEncoding == null) {
+        //     throw new SyntaxError(`Unknown encoding: ${value}`);
+        //   }
+        //   encoding = maybeEncoding;
+        //   if (encoding === ASCII_8BIT) {
+        //     throw new SyntaxError("Redundant ASCII-8BIT specifier in Symbol");
+        //   }
+        // } else {
+        //   throw new SyntaxError("Invalid encoding specifier in Symbol");
+        // }
+        // break;
+      default:
+        throw new SyntaxError("Invalid instance variable key in Symbol");
+    }
+    const sym = RSymbol(bytes, { encoding });
+    if (RSymbol.encodingOf(sym) !== encoding) {
+      throw new SyntaxError("Redundant encoding specifier in ASCII Symbol");
+    }
+    return sym;
   }
 
   #readByteSlice(): Uint8Array {

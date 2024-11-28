@@ -107,3 +107,4 @@ export function findEncoding(name: string): REncoding | undefined {
 
 export const UTF_8 = findEncoding("UTF-8")!;
 export const US_ASCII = findEncoding("US-ASCII")!;
+export const ASCII_8BIT = findEncoding("ASCII-8BIT")!;

@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import type { RObject } from "./rom.ts";
+import { ASCII_8BIT, type RObject, RSymbol } from "./rom.ts";
 import { load } from "./load.ts";
 
 export function l(buf: number[]): RObject {
@@ -508,5 +508,93 @@ Deno.test("load loads Float", () => {
   assertEquals(
     l([0x04, 0x08, 0x66, 0x0C, 0x2D, 0x35, 0x65, 0x2D, 0x33, 0x32, 0x34]),
     -5e-324,
+  );
+});
+
+Deno.test("load loads Symbol", () => {
+  assertEquals(l([0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]), "foo");
+  assertEquals(
+    l([0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82]),
+    RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
+  );
+  assertEquals(
+    l([
+      0x04,
+      0x08,
+      0x49,
+      0x3A,
+      0x08,
+      0xE3,
+      0x81,
+      0x82,
+      0x06,
+      0x3A,
+      0x06,
+      0x45,
+      0x54,
+    ]),
+    "あ",
+  );
+  // TODO
+  // assertEquals(
+  //   l([
+  //     0x04,
+  //     0x08,
+  //     0x49,
+  //     0x3A,
+  //     0x07,
+  //     0x82,
+  //     0xA0,
+  //     0x06,
+  //     0x3A,
+  //     0x0D,
+  //     0x65, // e
+  //     0x6E, // n
+  //     0x63, // c
+  //     0x6F, // o
+  //     0x64, // d
+  //     0x69, // i
+  //     0x6E, // n
+  //     0x67, // g
+  //     0x22,
+  //     0x10,
+  //     0x57, // W
+  //     0x69, // i
+  //     0x6E, // n
+  //     0x64, // d
+  //     0x6F, // o
+  //     0x77, // w
+  //     0x73, // s
+  //     0x2D, // -
+  //     0x33, // 3
+  //     0x31, // 1
+  //     0x4A, // J
+  //   ]),
+  //   RSymbol(Uint8Array.from([0x82, 0xA0]), {
+  //     encoding: findEncoding("Windows-31J")!,
+  //   }),
+  // );
+});
+
+Deno.test("load rejects invalid Symbol", () => {
+  // Redundant E=false clause
+  assertThrows(
+    () =>
+      l([
+        0x04,
+        0x08,
+        0x49,
+        0x3A,
+        0x08,
+        0x66,
+        0x6F,
+        0x6F,
+        0x06,
+        0x3A,
+        0x06,
+        0x45,
+        0x46,
+      ]),
+    SyntaxError,
   );
 });
