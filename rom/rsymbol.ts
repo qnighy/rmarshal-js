@@ -1,4 +1,4 @@
-import { REncoding, US_ASCII, UTF_8 } from "./encoding/mod.ts";
+import { REncoding } from "./encoding/mod.ts";
 import { WeakValueMap } from "../weak-value-map.ts";
 
 export type RSymbol = string | RExoticSymbol;
@@ -10,9 +10,9 @@ export function RSymbol(
   source: string | Uint8Array,
   options: RSymbolOptions = {},
 ): RSymbol {
-  const { encoding = UTF_8 } = options;
+  const { encoding = REncoding.UTF_8 } = options;
   if (typeof source === "string") {
-    if (encoding !== UTF_8) {
+    if (encoding !== REncoding.UTF_8) {
       throw new Error("TODO: encoding other than UTF-8");
     }
     if (!source.isWellFormed()) {
@@ -20,12 +20,12 @@ export function RSymbol(
     }
     return source;
   }
-  if (!encoding.isValid(source)) {
+  if (!encoding.isValidBytes(source)) {
     throw new TypeError("Got an invalid byte sequence as a symbol source");
   }
   const asciiCompat = true;
   const isASCII = asciiCompat && source.every((byte) => byte < 0x80);
-  if (isASCII || encoding === UTF_8) {
+  if (isASCII || encoding === REncoding.UTF_8) {
     return new TextDecoder("utf-8").decode(source);
   }
   return new RExoticSymbol(PRIVATE_KEY, source, encoding);
@@ -35,10 +35,10 @@ RSymbol.encodingOf = (symbol: RSymbol): REncoding => {
   if (typeof symbol === "string") {
     for (let i = 0; i < symbol.length; i++) {
       if (symbol.charCodeAt(i) >= 0x80) {
-        return UTF_8;
+        return REncoding.UTF_8;
       }
     }
-    return US_ASCII;
+    return REncoding.US_ASCII;
   }
   return symbol.encoding;
 };

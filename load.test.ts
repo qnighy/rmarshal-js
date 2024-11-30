@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { ASCII_8BIT, type RObject, RSymbol } from "./rom.ts";
+import { REncoding, type RObject, RSymbol } from "./rom.ts";
 import { load } from "./load.ts";
 import { seq, type SeqElement } from "./testutil.ts";
 
@@ -242,7 +242,9 @@ Deno.test("load loads Symbol", () => {
   assertEquals(l("\x04\x08", ":", 3, "foo"), "foo");
   assertEquals(
     l("\x04\x08", ":", 3, "\xE3\x81\x82"),
-    RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
+    RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
+      encoding: REncoding.ASCII_8BIT,
+    }),
   );
   assertEquals(
     l("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
@@ -264,7 +266,7 @@ Deno.test("load loads Symbol", () => {
   //     "Windows-31J",
   //   ),
   //   RSymbol(Uint8Array.from([0x82, 0xA0]), {
-  //     encoding: findEncoding("Windows-31J")!,
+  //     encoding: REncoding.Windows_31J,
   //   }),
   // );
 });

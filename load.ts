@@ -1,4 +1,4 @@
-import { ASCII_8BIT, REncoding, type RObject, RSymbol, UTF_8 } from "./rom.ts";
+import { REncoding, type RObject, RSymbol } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -202,7 +202,7 @@ export class Loader {
   #readSymbol(hasIvar: boolean): RSymbol {
     const bytes = this.#readByteSlice();
     if (!hasIvar) {
-      return RSymbol(bytes, { encoding: ASCII_8BIT });
+      return RSymbol(bytes, { encoding: REncoding.ASCII_8BIT });
     }
     const numIvars = this.#readUFixnum();
     if (numIvars !== 1) {
@@ -217,7 +217,7 @@ export class Loader {
       case "E":
         // Short encoding form
         if (value === true) {
-          encoding = UTF_8;
+          encoding = REncoding.UTF_8;
         } else if (value === false) {
           throw new SyntaxError("Redundant US-ASCII specifier in Symbol");
         } else {
@@ -233,7 +233,7 @@ export class Loader {
         //     throw new SyntaxError(`Unknown encoding: ${value}`);
         //   }
         //   encoding = maybeEncoding;
-        //   if (encoding === ASCII_8BIT) {
+        //   if (encoding === REncoding.ASCII_8BIT) {
         //     throw new SyntaxError("Redundant ASCII-8BIT specifier in Symbol");
         //   }
         // } else {

@@ -1,11 +1,4 @@
-import {
-  ASCII_8BIT,
-  RExoticSymbol,
-  type RObject,
-  RSymbol,
-  US_ASCII,
-  UTF_8,
-} from "./rom.ts";
+import { REncoding, RExoticSymbol, type RObject, RSymbol } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -96,7 +89,7 @@ class Dumper {
     const bytes = typeof value === "string"
       ? new TextEncoder().encode(value)
       : Uint8Array.from(value.bytes);
-    if (encoding === US_ASCII || encoding === ASCII_8BIT) {
+    if (encoding === REncoding.US_ASCII || encoding === REncoding.ASCII_8BIT) {
       this.#writeByte(0x3A); // ':'
       this.#writeBytes(bytes);
     } else {
@@ -104,7 +97,7 @@ class Dumper {
       this.#writeByte(0x3A); // ':'
       this.#writeBytes(bytes);
       this.#writeFixnum(1);
-      if (encoding === UTF_8) {
+      if (encoding === REncoding.UTF_8) {
         this.#writeSymbolObject("E");
         this.#writeByte(0x54); // 'T'
       } else {

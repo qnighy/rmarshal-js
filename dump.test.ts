@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { ASCII_8BIT, RSymbol } from "./rom.ts";
+import { REncoding, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 import { seq } from "./testutil.ts";
 
@@ -129,7 +129,9 @@ Deno.test("dump dumps Symbol", () => {
   assertEquals(dump("foo"), seq("\x04\x08", ":", 3, "foo"));
   assertEquals(
     dump(
-      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
+      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
+        encoding: REncoding.ASCII_8BIT,
+      }),
     ),
     seq("\x04\x08", ":", 3, "\xE3\x81\x82"),
   );
@@ -140,7 +142,7 @@ Deno.test("dump dumps Symbol", () => {
   // // TODO
   // assertEquals(
   //   dump(RSymbol(Uint8Array.from([0x82, 0xA0]), {
-  //     encoding: findEncoding("Windows-31J")!,
+  //     encoding: REncoding.Windows_31J,
   //   })),
   //   seq(
   //     "\x04\x08",
