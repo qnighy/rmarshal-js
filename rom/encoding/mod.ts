@@ -3,20 +3,16 @@ import ENCODING_REGISTRATIONS from "./encodings/mod.ts";
 
 const PRIVATE_KEY: unknown = {};
 export class REncoding {
-  #name: string;
+  readonly name: string;
   #impl: EncodingImpl;
 
   constructor(privateKey: unknown, name: string, impl: EncodingImpl) {
     if (privateKey !== PRIVATE_KEY) {
       throw new TypeError("Do not instantiate REncoding directly");
     }
-    this.#name = name;
+    this.name = name;
     this.#impl = impl;
     Object.freeze(this);
-  }
-
-  get name(): string {
-    return this.#name;
   }
 
   isValid(bytes: Uint8Array): boolean {
