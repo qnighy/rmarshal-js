@@ -3,10 +3,10 @@ import {
   assertInstanceOf,
   assertStrictEquals,
 } from "@std/assert";
-import { findEncoding } from "./encoding/mod.ts";
+import { REncoding } from "./encoding.ts";
 import { RExoticSymbol, RSymbol } from "./rsymbol.ts";
 
-const sjis = findEncoding("Windows-31J")!;
+const sjis = REncoding.find("Windows-31J");
 
 Deno.test("RSymbol() returns a string", () => {
   assertEquals(typeof RSymbol("hello"), "string");

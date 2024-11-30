@@ -1,11 +1,4 @@
-import {
-  ASCII_8BIT,
-  findEncoding,
-  REncoding,
-  type RObject,
-  RSymbol,
-  UTF_8,
-} from "./rom.ts";
+import { ASCII_8BIT, REncoding, type RObject, RSymbol, UTF_8 } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;

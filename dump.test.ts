@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { ASCII_8BIT, findEncoding, RSymbol } from "./rom.ts";
+import { ASCII_8BIT, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 import { seq } from "./testutil.ts";
 

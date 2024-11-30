@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert/equals";
-import { findEncoding } from "./mod.ts";
+import { REncoding } from "./mod.ts";
 
-const sjis = findEncoding("Windows-31J")!;
+const sjis = REncoding.find("Windows-31J");
 Deno.test("REncoding.codepoints", () => {
   const cp = (bytes: number[]) => [...sjis.codepoints(new Uint8Array(bytes))];
   assertEquals(cp([0x82, 0xA0, 0x41]), [0x82A0, 0x41]);

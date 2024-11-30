@@ -1,3 +1,4 @@
+import { freezeProperties } from "../../utils.ts";
 import { type EncodingImpl } from "./common-internal.ts";
 import ENCODING_REGISTRATIONS from "./encodings/mod.ts";
 
@@ -13,6 +14,22 @@ export class REncoding {
     this.name = name;
     this.#impl = impl;
     Object.freeze(this);
+  }
+
+  static [Symbol.hasInstance](instance: unknown): instance is REncoding {
+    return #impl in (instance as REncoding);
+  }
+
+  static query(name: string): REncoding | undefined {
+    return encodings.get(name.toLowerCase());
+  }
+
+  static find(name: string): REncoding {
+    const result = encodings.get(name.toLowerCase());
+    if (result == null) {
+      throw new TypeError(`Unknown encoding: ${name}`);
+    }
+    return result;
   }
 
   isValid(bytes: Uint8Array): boolean {
@@ -73,6 +90,9 @@ export class REncoding {
   }
 }
 
+freezeProperties(REncoding.prototype);
+freezeProperties(REncoding);
+
 const RUBY_BYTE_ESCAPES = new Map<number, string>([
   [0x07, "a"],
   [0x08, "b"],
@@ -97,10 +117,6 @@ const encodings: Map<string, REncoding> = (() => {
   return encodings;
 })();
 
-export function findEncoding(name: string): REncoding | undefined {
-  return encodings.get(name.toLowerCase());
-}
-
-export const UTF_8 = findEncoding("UTF-8")!;
-export const US_ASCII = findEncoding("US-ASCII")!;
-export const ASCII_8BIT = findEncoding("ASCII-8BIT")!;
+export const UTF_8 = REncoding.find("UTF-8");
+export const US_ASCII = REncoding.find("US-ASCII");
+export const ASCII_8BIT = REncoding.find("ASCII-8BIT");
