@@ -3,32 +3,22 @@ import { WeakValueMap } from "../weak-value-map.ts";
 
 export type RSymbol = string | RExoticSymbol;
 
-export type RSymbolOptions = {
-  encoding?: REncoding;
-};
 export function RSymbol(
-  source: string | Uint8Array,
-  options: RSymbolOptions = {},
+  bytes: Uint8Array,
+  encoding: REncoding,
 ): RSymbol {
-  const { encoding = REncoding.UTF_8 } = options;
-  if (typeof source === "string") {
-    if (encoding !== REncoding.UTF_8) {
-      throw new Error("TODO: encoding other than UTF-8");
-    }
-    if (!source.isWellFormed()) {
-      throw new TypeError("Got a non-well-formed string as a symbol source");
-    }
-    return source;
+  if (!(encoding instanceof REncoding)) {
+    throw new TypeError("encoding is not an REncoding");
   }
-  if (!encoding.isValidBytes(source)) {
+  if (!encoding.isValidBytes(bytes)) {
     throw new TypeError("Got an invalid byte sequence as a symbol source");
   }
   const asciiCompat = true;
-  const isASCII = asciiCompat && source.every((byte) => byte < 0x80);
+  const isASCII = asciiCompat && bytes.every((byte) => byte < 0x80);
   if (isASCII || encoding === REncoding.UTF_8) {
-    return new TextDecoder("utf-8").decode(source);
+    return new TextDecoder("utf-8").decode(bytes);
   }
-  return new RExoticSymbol(PRIVATE_KEY, source, encoding);
+  return new RExoticSymbol(PRIVATE_KEY, bytes, encoding);
 }
 
 RSymbol.encodingOf = (symbol: RSymbol): REncoding => {

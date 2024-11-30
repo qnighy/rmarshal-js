@@ -242,9 +242,7 @@ Deno.test("load loads Symbol", () => {
   assertEquals(l("\x04\x08", ":", 3, "foo"), "foo");
   assertEquals(
     l("\x04\x08", ":", 3, "\xE3\x81\x82"),
-    RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
-      encoding: REncoding.ASCII_8BIT,
-    }),
+    RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
   );
   assertEquals(
     l("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),

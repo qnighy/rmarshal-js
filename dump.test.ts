@@ -129,9 +129,7 @@ Deno.test("dump dumps Symbol", () => {
   assertEquals(dump("foo"), seq("\x04\x08", ":", 3, "foo"));
   assertEquals(
     dump(
-      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
-        encoding: REncoding.ASCII_8BIT,
-      }),
+      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
     ),
     seq("\x04\x08", ":", 3, "\xE3\x81\x82"),
   );

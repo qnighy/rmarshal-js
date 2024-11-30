@@ -202,7 +202,7 @@ export class Loader {
   #readSymbol(hasIvar: boolean): RSymbol {
     const bytes = this.#readByteSlice();
     if (!hasIvar) {
-      return RSymbol(bytes, { encoding: REncoding.ASCII_8BIT });
+      return RSymbol(bytes, REncoding.ASCII_8BIT);
     }
     const numIvars = this.#readUFixnum();
     if (numIvars !== 1) {
@@ -243,7 +243,7 @@ export class Loader {
       default:
         throw new SyntaxError("Invalid instance variable key in Symbol");
     }
-    const sym = RSymbol(bytes, { encoding });
+    const sym = RSymbol(bytes, encoding);
     if (RSymbol.encodingOf(sym) !== encoding) {
       throw new SyntaxError("Redundant encoding specifier in ASCII Symbol");
     }
