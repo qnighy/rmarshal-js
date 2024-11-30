@@ -1,440 +1,159 @@
 import { assertEquals } from "@std/assert";
-import { ASCII_8BIT, findEncoding, type RObject, RSymbol } from "./rom.ts";
+import { ASCII_8BIT, findEncoding, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
-
-function d(obj: RObject): number[] {
-  return Array.from(dump(obj));
-}
+import { seq } from "./testutil.ts";
 
 Deno.test("dump dumps nil", () => {
-  assertEquals(d(null), [0x04, 0x08, 0x30]);
+  assertEquals(dump(null), seq("\x04\x08", "0"));
 });
 
 Deno.test("dump dumps boolean", () => {
-  assertEquals(d(false), [0x04, 0x08, 0x46]);
-  assertEquals(d(true), [0x04, 0x08, 0x54]);
+  assertEquals(dump(false), seq("\x04\x08", "F"));
+  assertEquals(dump(true), seq("\x04\x08", "T"));
 });
 
 Deno.test("dump dumps Fixnum", () => {
   // Zero
-  assertEquals(d(0n), [0x04, 0x08, 0x69, 0x00]);
+  assertEquals(dump(0n), seq("\x04\x08", "i\x00"));
   // Positive short form
-  assertEquals(d(1n), [0x04, 0x08, 0x69, 0x06]);
-  assertEquals(d(122n), [0x04, 0x08, 0x69, 0x7F]);
+  assertEquals(dump(1n), seq("\x04\x08", "i\x06"));
+  assertEquals(dump(122n), seq("\x04\x08", "i\x7F"));
   // Negative short form
-  assertEquals(d(-1n), [0x04, 0x08, 0x69, 0xFA]);
-  assertEquals(d(-123n), [0x04, 0x08, 0x69, 0x80]);
+  assertEquals(dump(-1n), seq("\x04\x08", "i\xFA"));
+  assertEquals(dump(-123n), seq("\x04\x08", "i\x80"));
   // Positive 1-byte form
-  assertEquals(d(123n), [0x04, 0x08, 0x69, 0x01, 0x7B]);
-  assertEquals(d(255n), [0x04, 0x08, 0x69, 0x01, 0xFF]);
+  assertEquals(dump(123n), seq("\x04\x08", "i\x01\x7B"));
+  assertEquals(dump(255n), seq("\x04\x08", "i\x01\xFF"));
   // Positive 2-byte form
-  assertEquals(d(256n), [0x04, 0x08, 0x69, 0x02, 0x00, 0x01]);
-  assertEquals(d(0xFFFFn), [0x04, 0x08, 0x69, 0x02, 0xFF, 0xFF]);
+  assertEquals(dump(256n), seq("\x04\x08", "i\x02\x00\x01"));
+  assertEquals(dump(0xFFFFn), seq("\x04\x08", "i\x02\xFF\xFF"));
   // Positive 3-byte form
-  assertEquals(d(0x10000n), [0x04, 0x08, 0x69, 0x03, 0x00, 0x00, 0x01]);
-  assertEquals(d(0xFFFFFFn), [0x04, 0x08, 0x69, 0x03, 0xFF, 0xFF, 0xFF]);
+  assertEquals(dump(0x10000n), seq("\x04\x08", "i\x03\x00\x00\x01"));
+  assertEquals(dump(0xFFFFFFn), seq("\x04\x08", "i\x03\xFF\xFF\xFF"));
   // Positive 4-byte form
-  assertEquals(d(0x1000000n), [0x04, 0x08, 0x69, 0x04, 0x00, 0x00, 0x00, 0x01]);
-  assertEquals(d(0x3FFFFFFFn), [
-    0x04,
-    0x08,
-    0x69,
-    0x04,
-    0xFF,
-    0xFF,
-    0xFF,
-    0x3F,
-  ]);
+  assertEquals(dump(0x1000000n), seq("\x04\x08", "i\x04\x00\x00\x00\x01"));
+  assertEquals(dump(0x3FFFFFFFn), seq("\x04\x08", "i\x04\xFF\xFF\xFF\x3F"));
   // Negative 1-byte form
-  assertEquals(d(-124n), [0x04, 0x08, 0x69, 0xFF, 0x84]);
-  assertEquals(d(-256n), [0x04, 0x08, 0x69, 0xFF, 0x00]);
+  assertEquals(dump(-124n), seq("\x04\x08", "i\xFF\x84"));
+  assertEquals(dump(-256n), seq("\x04\x08", "i\xFF\x00"));
   // Negative 2-byte form
-  assertEquals(d(-257n), [0x04, 0x08, 0x69, 0xFE, 0xFF, 0xFE]);
-  assertEquals(d(-0x10000n), [0x04, 0x08, 0x69, 0xFE, 0x00, 0x00]);
+  assertEquals(dump(-257n), seq("\x04\x08", "i\xFE\xFF\xFE"));
+  assertEquals(dump(-0x10000n), seq("\x04\x08", "i\xFE\x00\x00"));
   // Negative 3-byte form
-  assertEquals(d(-0x10001n), [0x04, 0x08, 0x69, 0xFD, 0xFF, 0xFF, 0xFE]);
-  assertEquals(d(-0x1000000n), [0x04, 0x08, 0x69, 0xFD, 0x00, 0x00, 0x00]);
+  assertEquals(dump(-0x10001n), seq("\x04\x08", "i\xFD\xFF\xFF\xFE"));
+  assertEquals(dump(-0x1000000n), seq("\x04\x08", "i\xFD\x00\x00\x00"));
   // Negative 4-byte form
-  assertEquals(d(-0x1000001n), [
-    0x04,
-    0x08,
-    0x69,
-    0xFC,
-    0xFF,
-    0xFF,
-    0xFF,
-    0xFE,
-  ]);
-  assertEquals(d(-0x40000000n), [
-    0x04,
-    0x08,
-    0x69,
-    0xFC,
-    0x00,
-    0x00,
-    0x00,
-    0xC0,
-  ]);
+  assertEquals(dump(-0x1000001n), seq("\x04\x08", "i\xFC\xFF\xFF\xFF\xFE"));
+  assertEquals(dump(-0x40000000n), seq("\x04\x08", "i\xFC\x00\x00\x00\xC0"));
 });
 
 Deno.test("dump dumps Float", () => {
   // Non-finite values
   // NaN
-  assertEquals(d(NaN), [0x04, 0x08, 0x66, 0x08, 0x6E, 0x61, 0x6E]);
+  assertEquals(dump(NaN), seq("\x04\x08", "f", 3, "nan"));
   // Infinity
-  assertEquals(d(Infinity), [0x04, 0x08, 0x66, 0x08, 0x69, 0x6E, 0x66]);
+  assertEquals(dump(Infinity), seq("\x04\x08", "f", 3, "inf"));
+
   // -Infinity
-  assertEquals(d(-Infinity), [0x04, 0x08, 0x66, 0x09, 0x2D, 0x69, 0x6E, 0x66]);
+  assertEquals(dump(-Infinity), seq("\x04\x08", "f", 4, "-inf"));
 
   // Zeroes
   // 0
-  assertEquals(d(0), [0x04, 0x08, 0x66, 0x06, 0x30]);
+  assertEquals(dump(0), seq("\x04\x08", "f", 1, "0"));
   // -0
-  assertEquals(d(-0), [0x04, 0x08, 0x66, 0x07, 0x2D, 0x30]);
+  assertEquals(dump(-0), seq("\x04\x08", "f", 2, "-0"));
 
   // Integers in non-scientific notation
   // 1
-  assertEquals(d(1), [0x04, 0x08, 0x66, 0x06, 0x31]);
+  assertEquals(dump(1), seq("\x04\x08", "f", 1, "1"));
   // -1
-  assertEquals(d(-1), [0x04, 0x08, 0x66, 0x07, 0x2D, 0x31]);
+  assertEquals(dump(-1), seq("\x04\x08", "f", 2, "-1"));
   // 9007199254740992
   assertEquals(
-    d(9007199254740992e+0),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x15,
-      0x39,
-      0x30,
-      0x30,
-      0x37,
-      0x31,
-      0x39,
-      0x39,
-      0x32,
-      0x35,
-      0x34,
-      0x37,
-      0x34,
-      0x30,
-      0x39,
-      0x39,
-      0x32,
-    ],
+    dump(9007199254740992e+0),
+    seq("\x04\x08", "f", 16, "9007199254740992"),
   );
   assertEquals(
-    d(72057594037927896e+0),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x16,
-      0x37,
-      0x32,
-      0x30,
-      0x35,
-      0x37,
-      0x35,
-      0x39,
-      0x34,
-      0x30,
-      0x33,
-      0x37,
-      0x39,
-      0x32,
-      0x37,
-      0x38,
-      0x39,
-      0x36,
-    ],
+    dump(72057594037927896e+0),
+    seq("\x04\x08", "f", 17, "72057594037927896"),
   );
   assertEquals(
-    d(-9007199254740992e+0),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x16,
-      0x2D,
-      0x39,
-      0x30,
-      0x30,
-      0x37,
-      0x31,
-      0x39,
-      0x39,
-      0x32,
-      0x35,
-      0x34,
-      0x37,
-      0x34,
-      0x30,
-      0x39,
-      0x39,
-      0x32,
-    ],
+    dump(-9007199254740992e+0),
+    seq("\x04\x08", "f", 17, "-9007199254740992"),
   );
   assertEquals(
-    d(-72057594037927896e+0),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x17,
-      0x2D,
-      0x37,
-      0x32,
-      0x30,
-      0x35,
-      0x37,
-      0x35,
-      0x39,
-      0x34,
-      0x30,
-      0x33,
-      0x37,
-      0x39,
-      0x32,
-      0x37,
-      0x38,
-      0x39,
-      0x36,
-    ],
+    dump(-72057594037927896e+0),
+    seq("\x04\x08", "f", 18, "-72057594037927896"),
   );
 
   // Integers in scientific notation
   // "1e1"
-  assertEquals(d(10), [0x04, 0x08, 0x66, 0x08, 0x31, 0x65, 0x31]);
+  assertEquals(dump(10), seq("\x04\x08", "f", 3, "1e1"));
   // "-1e1"
-  assertEquals(d(-10), [0x04, 0x08, 0x66, 0x09, 0x2D, 0x31, 0x65, 0x31]);
+  assertEquals(dump(-10), seq("\x04\x08", "f", 4, "-1e1"));
   // "1.7976931348623157e308"
   assertEquals(
-    d(1.7976931348623157e+308),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x1B,
-      0x31,
-      0x2E,
-      0x37,
-      0x39,
-      0x37,
-      0x36,
-      0x39,
-      0x33,
-      0x31,
-      0x33,
-      0x34,
-      0x38,
-      0x36,
-      0x32,
-      0x33,
-      0x31,
-      0x35,
-      0x37,
-      0x65,
-      0x33,
-      0x30,
-      0x38,
-    ],
+    dump(1.7976931348623157e+308),
+    seq("\x04\x08", "f", 22, "1.7976931348623157e308"),
   );
   // "-1.7976931348623157e308"
   assertEquals(
-    d(-1.7976931348623157e+308),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x1C,
-      0x2D,
-      0x31,
-      0x2E,
-      0x37,
-      0x39,
-      0x37,
-      0x36,
-      0x39,
-      0x33,
-      0x31,
-      0x33,
-      0x34,
-      0x38,
-      0x36,
-      0x32,
-      0x33,
-      0x31,
-      0x35,
-      0x37,
-      0x65,
-      0x33,
-      0x30,
-      0x38,
-    ],
+    dump(-1.7976931348623157e+308),
+    seq("\x04\x08", "f", 23, "-1.7976931348623157e308"),
   );
 
   // Non-scientific fractions
   // "0.0001"
-  assertEquals(
-    d(0.0001),
-    [0x04, 0x08, 0x66, 0x0B, 0x30, 0x2E, 0x30, 0x30, 0x30, 0x31],
-  );
+  assertEquals(dump(0.0001), seq("\x04\x08", "f", 6, "0.0001"));
   // "-0.0001"
-  assertEquals(
-    d(-0.0001),
-    [0x04, 0x08, 0x66, 0x0C, 0x2D, 0x30, 0x2E, 0x30, 0x30, 0x30, 0x31],
-  );
+  assertEquals(dump(-0.0001), seq("\x04\x08", "f", 7, "-0.0001"));
 
   // Scientific fractions
   // "9.999999999999999e-5"
   assertEquals(
-    d(9.999999999999999e-5),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x19,
-      0x39,
-      0x2E,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x65,
-      0x2D,
-      0x35,
-    ],
+    dump(9.999999999999999e-5),
+    seq("\x04\x08", "f", 20, "9.999999999999999e-5"),
   );
   // "-9.999999999999999e-5"
   assertEquals(
-    d(-9.999999999999999e-5),
-    [
-      0x04,
-      0x08,
-      0x66,
-      0x1A,
-      0x2D,
-      0x39,
-      0x2E,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x65,
-      0x2D,
-      0x35,
-    ],
+    dump(-9.999999999999999e-5),
+    seq("\x04\x08", "f", 21, "-9.999999999999999e-5"),
   );
   // "5e-324"
-  assertEquals(d(5e-324), [
-    0x04,
-    0x08,
-    0x66,
-    0x0B,
-    0x35,
-    0x65,
-    0x2D,
-    0x33,
-    0x32,
-    0x34,
-  ]);
+  assertEquals(dump(5e-324), seq("\x04\x08", "f", 6, "5e-324"));
   // "-5e-324"
-  assertEquals(d(-5e-324), [
-    0x04,
-    0x08,
-    0x66,
-    0x0C,
-    0x2D,
-    0x35,
-    0x65,
-    0x2D,
-    0x33,
-    0x32,
-    0x34,
-  ]);
+  assertEquals(dump(-5e-324), seq("\x04\x08", "f", 7, "-5e-324"));
 });
 
 Deno.test("dump dumps Symbol", () => {
-  assertEquals(d("foo"), [0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]);
+  assertEquals(dump("foo"), seq("\x04\x08", ":", 3, "foo"));
   assertEquals(
-    d(RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), {
-      encoding: ASCII_8BIT,
-    })),
-    [0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82],
+    dump(
+      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
+    ),
+    seq("\x04\x08", ":", 3, "\xE3\x81\x82"),
   );
   assertEquals(
-    d("あ"),
-    [
-      0x04,
-      0x08,
-      0x49,
-      0x3A,
-      0x08,
-      0xE3,
-      0x81,
-      0x82,
-      0x06,
-      0x3A,
-      0x06,
-      0x45,
-      0x54,
-    ],
+    dump("あ"),
+    seq("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
   );
   // // TODO
   // assertEquals(
-  //   d(RSymbol(Uint8Array.from([0x82, 0xA0]), {
+  //   dump(RSymbol(Uint8Array.from([0x82, 0xA0]), {
   //     encoding: findEncoding("Windows-31J")!,
   //   })),
-  //   [
-  //     0x04,
-  //     0x08,
-  //     0x49,
-  //     0x3A,
-  //     0x07,
-  //     0x65,
-  //     0x6E,
-  //     0x63,
-  //     0x6F,
-  //     0x64,
-  //     0x69,
-  //     0x6E,
-  //     0x67,
-  //     0x22,
-  //     0x10,
-  //     0x57,
-  //     0x69,
-  //     0x6E,
-  //     0x64,
-  //     0x6F,
-  //     0x77,
-  //     0x73,
-  //     0x2D,
-  //     0x33,
-  //     0x31,
-  //     0x4A,
-  //   ],
+  //   seq(
+  //     "\x04\x08",
+  //     "I:",
+  //     2,
+  //     "\x82\xA0",
+  //     1,
+  //     ":",
+  //     8,
+  //     "encoding",
+  //     '"',
+  //     11,
+  //     "Windows-31J",
+  //   ),
   // );
 });
