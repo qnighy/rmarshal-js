@@ -1,226 +1,158 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 import { ASCII_8BIT, type RObject, RSymbol } from "./rom.ts";
 import { load } from "./load.ts";
+import { seq, type SeqElement } from "./testutil.ts";
 
-export function l(buf: number[]): RObject {
-  return load(new Uint8Array(buf));
+function l(...elems: SeqElement[]): RObject {
+  return load(seq(...elems));
 }
 
 Deno.test("load loads something", () => {
-  assertEquals(l([0x04, 0x08, 0x30]), null);
+  assertEquals(l("\x04\x08", "0"), null);
 });
 
 Deno.test("load rejects short or long data", () => {
-  assertThrows(() => l([0x04, 0x08]), SyntaxError);
-  assertThrows(() => l([0x04, 0x08, 0x30, 0x30]), SyntaxError);
+  assertThrows(() => l("\x04\x08"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "0", "0"), SyntaxError);
 });
 
 Deno.test("load rejects invalid versions", () => {
-  assertThrows(() => l([0x03, 0x08, 0x30]), SyntaxError);
-  assertThrows(() => l([0x05, 0x08, 0x30]), SyntaxError);
-  assertThrows(() => l([0x04, 0x09, 0x30]), SyntaxError);
-  assertEquals(l([0x04, 0x07, 0x30]), null);
+  assertThrows(() => l("\x03\x08", "0"), SyntaxError);
+  assertThrows(() => l("\x05\x08", "0"), SyntaxError);
+  assertThrows(() => l("\x04\x09", "0"), SyntaxError);
+  assertEquals(l("\x04\x07", "0"), null);
 });
 
 Deno.test("load loads nil", () => {
-  assertEquals(l([0x04, 0x08, 0x30]), null);
+  assertEquals(l("\x04\x08", "0"), null);
 });
 
 Deno.test("load loads boolean", () => {
-  assertEquals(l([0x04, 0x08, 0x46]), false);
-  assertEquals(l([0x04, 0x08, 0x54]), true);
+  assertEquals(l("\x04\x08", "F"), false);
+  assertEquals(l("\x04\x08", "T"), true);
 });
 
 Deno.test("load loads Fixnum", () => {
   // Zero
-  assertEquals(l([0x04, 0x08, 0x69, 0x00]), 0n);
+  assertEquals(l("\x04\x08", "i\x00"), 0n);
   // Positive short form
-  assertEquals(l([0x04, 0x08, 0x69, 0x06]), 1n);
-  assertEquals(l([0x04, 0x08, 0x69, 0x7F]), 122n);
+  assertEquals(l("\x04\x08", "i\x06"), 1n);
+  assertEquals(l("\x04\x08", "i\x7F"), 122n);
   // Negative short form
-  assertEquals(l([0x04, 0x08, 0x69, 0xFA]), -1n);
-  assertEquals(l([0x04, 0x08, 0x69, 0x80]), -123n);
+  assertEquals(l("\x04\x08", "i\xFA"), -1n);
+  assertEquals(l("\x04\x08", "i\x80"), -123n);
   // Positive 1-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0x01, 0x7B]), 123n);
-  assertEquals(l([0x04, 0x08, 0x69, 0x01, 0xFF]), 255n);
+  assertEquals(l("\x04\x08", "i\x01\x7B"), 123n);
+  assertEquals(l("\x04\x08", "i\x01\xFF"), 255n);
   // Positive 2-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0x02, 0x00, 0x01]), 256n);
-  assertEquals(l([0x04, 0x08, 0x69, 0x02, 0xFF, 0xFF]), 0xFFFFn);
+  assertEquals(l("\x04\x08", "i\x02\x00\x01"), 256n);
+  assertEquals(l("\x04\x08", "i\x02\xFF\xFF"), 0xFFFFn);
   // Positive 3-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0x03, 0x00, 0x00, 0x01]), 0x10000n);
-  assertEquals(l([0x04, 0x08, 0x69, 0x03, 0xFF, 0xFF, 0xFF]), 0xFFFFFFn);
+  assertEquals(l("\x04\x08", "i\x03\x00\x00\x01"), 0x10000n);
+  assertEquals(l("\x04\x08", "i\x03\xFF\xFF\xFF"), 0xFFFFFFn);
   // Positive 4-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0x04, 0x00, 0x00, 0x00, 0x01]), 0x1000000n);
-  assertEquals(
-    l([0x04, 0x08, 0x69, 0x04, 0xFF, 0xFF, 0xFF, 0x3F]),
-    0x3FFFFFFFn,
-  );
+  assertEquals(l("\x04\x08", "i\x04\x00\x00\x00\x01"), 0x1000000n);
+  assertEquals(l("\x04\x08", "i\x04\xFF\xFF\xFF\x3F"), 0x3FFFFFFFn);
   // Negative 1-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0xFF, 0x84]), -124n);
-  assertEquals(l([0x04, 0x08, 0x69, 0xFF, 0x00]), -256n);
+  assertEquals(l("\x04\x08", "i\xFF\x84"), -124n);
+  assertEquals(l("\x04\x08", "i\xFF\x00"), -256n);
   // Negative 2-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0xFE, 0xFF, 0xFE]), -257n);
-  assertEquals(l([0x04, 0x08, 0x69, 0xFE, 0x00, 0x00]), -0x10000n);
+  assertEquals(l("\x04\x08", "i\xFE\xFF\xFE"), -257n);
+  assertEquals(l("\x04\x08", "i\xFE\x00\x00"), -0x10000n);
   // Negative 3-byte form
-  assertEquals(l([0x04, 0x08, 0x69, 0xFD, 0xFF, 0xFF, 0xFE]), -0x10001n);
-  assertEquals(l([0x04, 0x08, 0x69, 0xFD, 0x00, 0x00, 0x00]), -0x1000000n);
+  assertEquals(l("\x04\x08", "i\xFD\xFF\xFF\xFE"), -0x10001n);
+  assertEquals(l("\x04\x08", "i\xFD\x00\x00\x00"), -0x1000000n);
   // Negative 4-byte form
-  assertEquals(
-    l([0x04, 0x08, 0x69, 0xFC, 0xFF, 0xFF, 0xFF, 0xFE]),
-    -0x1000001n,
-  );
-  assertEquals(
-    l([0x04, 0x08, 0x69, 0xFC, 0x00, 0x00, 0x00, 0xC0]),
-    -0x40000000n,
-  );
+  assertEquals(l("\x04\x08", "i\xFC\xFF\xFF\xFF\xFE"), -0x1000001n);
+  assertEquals(l("\x04\x08", "i\xFC\x00\x00\x00\xC0"), -0x40000000n);
 });
 
 Deno.test("load rejects non-canonical Fixnum", () => {
   // Non-canonical positive short form of 0
-  assertThrows(() => l([0x04, 0x08, 0x69, 0x05]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x05"), SyntaxError);
   // Non-canonical negative short form of 0
-  assertThrows(() => l([0x04, 0x08, 0x69, 0xFB]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFB"), SyntaxError);
   // Redundant positive 1-byte form (0 to 122)
-  assertThrows(() => l([0x04, 0x08, 0x69, 0x01, 0x00]), SyntaxError);
-  assertThrows(() => l([0x04, 0x08, 0x69, 0x01, 0x7A]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x01\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x01\x7A"), SyntaxError);
   // Redundant positive 2-byte form (0 to 255)
-  assertThrows(() => l([0x04, 0x08, 0x69, 0x02, 0x00, 0x00]), SyntaxError);
-  assertThrows(() => l([0x04, 0x08, 0x69, 0x02, 0xFF, 0x00]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x02\x00\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x02\xFF\x00"), SyntaxError);
   // Redundant positive 3-byte form (0 to 0xFFFF)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x03, 0x00, 0x00, 0x00]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x03, 0xFF, 0xFF, 0x00]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\x03\x00\x00\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x03\xFF\xFF\x00"), SyntaxError);
   // Redundant positive 4-byte form (0 to 0xFFFFFF)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x04, 0x00, 0x00, 0x00, 0x00]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x04, 0xFF, 0xFF, 0xFF, 0x00]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\x04\x00\x00\x00\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x04\xFF\xFF\xFF\x00"), SyntaxError);
   // Incorrect Bignum representation as Fixnum (0x40000000 to 0xFFFFFFFF)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x04, 0x00, 0x00, 0x00, 0x40]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0x04, 0xFF, 0xFF, 0xFF, 0xFF]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\x04\x00\x00\x00\x40"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\x04\xFF\xFF\xFF\xFF"), SyntaxError);
   // Redundant negative 1-byte form (-1 to -123)
-  assertThrows(() => l([0x04, 0x08, 0x69, 0xFF, 0xFF]), SyntaxError);
-  assertThrows(() => l([0x04, 0x08, 0x69, 0xFF, 0x85]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFF\xFF"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFF\x85"), SyntaxError);
   // Redundant negative 2-byte form (-1 to -256)
-  assertThrows(() => l([0x04, 0x08, 0x69, 0xFE, 0xFF, 0xFF]), SyntaxError);
-  assertThrows(() => l([0x04, 0x08, 0x69, 0xFE, 0x00, 0xFF]), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFE\xFF\xFF"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFE\x00\xFF"), SyntaxError);
   // Redundant negative 3-byte form (-1 to -0x10000)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0xFD, 0xFF, 0xFF, 0xFF]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0xFD, 0x00, 0x00, 0xFF]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\xFD\xFF\xFF\xFF"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFD\x00\x00\xFF"), SyntaxError);
   // Redundant negative 4-byte form (-1 to -0x1000000)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0xFC, 0xFF, 0xFF, 0xFF, 0xFF]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0xFC, 0x00, 0x00, 0x00, 0xFF]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\xFC\xFF\xFF\xFF\xFF"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "i\xFC\x00\x00\x00\xFF"), SyntaxError);
   // Incorrect Bignum representation as Fixnum (-0x40000000 to -0x1000001)
-  assertThrows(
-    () => l([0x04, 0x08, 0x69, 0xFC, 0xFF, 0xFF, 0xFF, 0xBF]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "i\xFC\xFF\xFF\xFF\xBF"), SyntaxError);
 });
 
 Deno.test("load loads Bignum", () => {
   // 2 words, positive
-  assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2B, 0x07, 0x00, 0x00, 0x00, 0x40]),
-    0x40000000n,
-  );
-  assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2B, 0x07, 0xFF, 0xFF, 0xFF, 0xFF]),
-    0xFFFFFFFFn,
-  );
+  assertEquals(l("\x04\x08", "l+", 2, "\x00\x00\x00\x40"), 0x40000000n);
+  assertEquals(l("\x04\x08", "l+", 2, "\xFF\xFF\xFF\xFF"), 0xFFFFFFFFn);
   // 2 words, negative
-  assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2D, 0x07, 0x01, 0x00, 0x00, 0x40]),
-    -0x40000001n,
-  );
-  assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2D, 0x07, 0xFF, 0xFF, 0xFF, 0xFF]),
-    -0xFFFFFFFFn,
-  );
+  assertEquals(l("\x04\x08", "l-", 2, "\x01\x00\x00\x40"), -0x40000001n);
+  assertEquals(l("\x04\x08", "l-", 2, "\xFF\xFF\xFF\xFF"), -0xFFFFFFFFn);
   // 3 words, positive
   assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+    l("\x04\x08", "l+", 3, "\x00\x00\x00\x00\x01\x00"),
     0x100000000n,
   );
   assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2B, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
+    l("\x04\x08", "l+", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
     0xFFFFFFFFFFFFn,
   );
   // 3 words, negative
   assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2D, 0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+    l("\x04\x08", "l-", 3, "\x00\x00\x00\x00\x01\x00"),
     -0x100000000n,
   );
   assertEquals(
-    l([0x04, 0x08, 0x6C, 0x2D, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
+    l("\x04\x08", "l-", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
     -0xFFFFFFFFFFFFn,
   );
 });
 
 Deno.test("load rejects non-canonical Bignum", () => {
   // Non-canonical sign -- bytes other than '-' are treated as non-canonical positive
-  assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2C, 0x07, 0x00, 0x00, 0x00, 0x40]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "l,", 2, "\x00\x00\x00\x40"), SyntaxError);
   // Incorrect Fixnum representation as Bignum (-0x40000000 to 0x3FFFFFFF)
-  assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2D, 0x07, 0x00, 0x00, 0x00, 0x40]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2D, 0x07, 0x00, 0x00, 0x00, 0x00]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2B, 0x07, 0x00, 0x00, 0x00, 0x00]),
-    SyntaxError,
-  );
-  assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2B, 0x07, 0xFF, 0xFF, 0xFF, 0x3F]),
-    SyntaxError,
-  );
+  assertThrows(() => l("\x04\x08", "l-", 2, "\x00\x00\x00\x40"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "l-", 2, "\x00\x00\x00\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "l+", 2, "\x00\x00\x00\x00"), SyntaxError);
+  assertThrows(() => l("\x04\x08", "l+", 2, "\xFF\xFF\xFF\x3F"), SyntaxError);
   // Redundant 3-word form (0 to 0xFFFFFFFF in either sign)
   assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    () => l("\x04\x08", "l+", 3, "\x00\x00\x00\x00\x00\x00"),
     SyntaxError,
   );
   assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2B, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00]),
+    () => l("\x04\x08", "l+", 3, "\xFF\xFF\xFF\xFF\x00\x00"),
     SyntaxError,
   );
   assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2D, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    () => l("\x04\x08", "l-", 3, "\x00\x00\x00\x00\x00\x00"),
     SyntaxError,
   );
   assertThrows(
-    () => l([0x04, 0x08, 0x6C, 0x2D, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00]),
+    () => l("\x04\x08", "l-", 3, "\xFF\xFF\xFF\xFF\x00\x00"),
     SyntaxError,
   );
 });
@@ -228,348 +160,109 @@ Deno.test("load rejects non-canonical Bignum", () => {
 Deno.test("load loads Float", () => {
   // Non-finite values
   // "nan"
-  assertEquals(l([0x04, 0x08, 0x66, 0x08, 0x6E, 0x61, 0x6E]), NaN);
+  assertEquals(l("\x04\x08", "f", 3, "nan"), NaN);
   // "inf"
-  assertEquals(l([0x04, 0x08, 0x66, 0x08, 0x69, 0x6E, 0x66]), Infinity);
+  assertEquals(l("\x04\x08", "f", 3, "inf"), Infinity);
   // "-inf"
-  assertEquals(l([0x04, 0x08, 0x66, 0x09, 0x2D, 0x69, 0x6E, 0x66]), -Infinity);
+  assertEquals(l("\x04\x08", "f", 4, "-inf"), -Infinity);
 
   // Zeroes
   // "0"
-  assertStrictEquals(l([0x04, 0x08, 0x66, 0x06, 0x30]), 0);
+  assertStrictEquals(l("\x04\x08", "f", 1, "0"), 0);
   // "-0"
-  assertStrictEquals(l([0x04, 0x08, 0x66, 0x07, 0x2D, 0x30]), -0);
+  assertStrictEquals(l("\x04\x08", "f", 2, "-0"), -0);
 
   // Integers in non-scientific notation
   // "1"
-  assertEquals(l([0x04, 0x08, 0x66, 0x06, 0x31]), 1);
+  assertEquals(l("\x04\x08", "f", 1, "1"), 1);
   // "-1"
-  assertEquals(l([0x04, 0x08, 0x66, 0x07, 0x2D, 0x31]), -1);
+  assertEquals(l("\x04\x08", "f", 2, "-1"), -1);
   // "9007199254740992"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x15,
-      0x39,
-      0x30,
-      0x30,
-      0x37,
-      0x31,
-      0x39,
-      0x39,
-      0x32,
-      0x35,
-      0x34,
-      0x37,
-      0x34,
-      0x30,
-      0x39,
-      0x39,
-      0x32,
-    ]),
+    l("\x04\x08", "f", 16, "9007199254740992"),
     9007199254740992e+0,
   );
   // "72057594037927896"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x16,
-      0x37,
-      0x32,
-      0x30,
-      0x35,
-      0x37,
-      0x35,
-      0x39,
-      0x34,
-      0x30,
-      0x33,
-      0x37,
-      0x39,
-      0x32,
-      0x37,
-      0x38,
-      0x39,
-      0x36,
-    ]),
+    l("\x04\x08", "f", 17, "72057594037927896"),
     72057594037927896e+0,
   );
   // "-9007199254740992"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x16,
-      0x2D,
-      0x39,
-      0x30,
-      0x30,
-      0x37,
-      0x31,
-      0x39,
-      0x39,
-      0x32,
-      0x35,
-      0x34,
-      0x37,
-      0x34,
-      0x30,
-      0x39,
-      0x39,
-      0x32,
-    ]),
+    l("\x04\x08", "f", 17, "-9007199254740992"),
     -9007199254740992e+0,
   );
   // "-72057594037927896"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x17,
-      0x2D,
-      0x37,
-      0x32,
-      0x30,
-      0x35,
-      0x37,
-      0x35,
-      0x39,
-      0x34,
-      0x30,
-      0x33,
-      0x37,
-      0x39,
-      0x32,
-      0x37,
-      0x38,
-      0x39,
-      0x36,
-    ]),
+    l("\x04\x08", "f", 18, "-72057594037927896"),
     -72057594037927896e+0,
   );
 
   // Integers in scientific notation
   // "1e1"
-  assertEquals(l([0x04, 0x08, 0x66, 0x08, 0x31, 0x65, 0x31]), 10);
+  assertEquals(l("\x04\x08", "f", 3, "1e1"), 10);
   // "-1e1"
-  assertEquals(l([0x04, 0x08, 0x66, 0x09, 0x2D, 0x31, 0x65, 0x31]), -10);
+  assertEquals(l("\x04\x08", "f", 4, "-1e1"), -10);
   // "1.7976931348623157e308"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x1B,
-      0x31,
-      0x2E,
-      0x37,
-      0x39,
-      0x37,
-      0x36,
-      0x39,
-      0x33,
-      0x31,
-      0x33,
-      0x34,
-      0x38,
-      0x36,
-      0x32,
-      0x33,
-      0x31,
-      0x35,
-      0x37,
-      0x65,
-      0x33,
-      0x30,
-      0x38,
-    ]),
+    l("\x04\x08", "f", 22, "1.7976931348623157e308"),
     1.7976931348623157e+308,
   );
   // "-1.7976931348623157e308"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x1C,
-      0x2D,
-      0x31,
-      0x2E,
-      0x37,
-      0x39,
-      0x37,
-      0x36,
-      0x39,
-      0x33,
-      0x31,
-      0x33,
-      0x34,
-      0x38,
-      0x36,
-      0x32,
-      0x33,
-      0x31,
-      0x35,
-      0x37,
-      0x65,
-      0x33,
-      0x30,
-      0x38,
-    ]),
+    l("\x04\x08", "f", 23, "-1.7976931348623157e308"),
     -1.7976931348623157e+308,
   );
 
   // Non-scientific fractions
   // "0.0001"
-  assertEquals(
-    l([0x04, 0x08, 0x66, 0x0B, 0x30, 0x2E, 0x30, 0x30, 0x30, 0x31]),
-    0.0001,
-  );
+  assertEquals(l("\x04\x08", "f", 6, "0.0001"), 0.0001);
   // "-0.0001"
-  assertEquals(
-    l([0x04, 0x08, 0x66, 0x0C, 0x2D, 0x30, 0x2E, 0x30, 0x30, 0x30, 0x31]),
-    -0.0001,
-  );
+  assertEquals(l("\x04\x08", "f", 7, "-0.0001"), -0.0001);
 
   // Scientific fractions
   // "9.999999999999999e-5"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x19,
-      0x39,
-      0x2E,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x65,
-      0x2D,
-      0x35,
-    ]),
+    l("\x04\x08", "f", 20, "9.999999999999999e-5"),
     9.999999999999999e-5,
   );
   // "-9.999999999999999e-5"
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x66,
-      0x1A,
-      0x2D,
-      0x39,
-      0x2E,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x39,
-      0x65,
-      0x2D,
-      0x35,
-    ]),
+    l("\x04\x08", "f", 21, "-9.999999999999999e-5"),
     -9.999999999999999e-5,
   );
   // "5e-324"
-  assertEquals(
-    l([0x04, 0x08, 0x66, 0x0B, 0x35, 0x65, 0x2D, 0x33, 0x32, 0x34]),
-    5e-324,
-  );
+  assertEquals(l("\x04\x08", "f", 6, "5e-324"), 5e-324);
   // "-5e-324"
-  assertEquals(
-    l([0x04, 0x08, 0x66, 0x0C, 0x2D, 0x35, 0x65, 0x2D, 0x33, 0x32, 0x34]),
-    -5e-324,
-  );
+  assertEquals(l("\x04\x08", "f", 7, "-5e-324"), -5e-324);
 });
 
 Deno.test("load loads Symbol", () => {
-  assertEquals(l([0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]), "foo");
+  // assertEquals(l([0x04, 0x08, 0x3A, 0x08, 0x66, 0x6F, 0x6F]), "foo");
+  assertEquals(l("\x04\x08", ":", 3, "foo"), "foo");
   assertEquals(
-    l([0x04, 0x08, 0x3A, 0x08, 0xE3, 0x81, 0x82]),
+    l("\x04\x08", ":", 3, "\xE3\x81\x82"),
     RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), { encoding: ASCII_8BIT }),
   );
   assertEquals(
-    l([
-      0x04,
-      0x08,
-      0x49,
-      0x3A,
-      0x08,
-      0xE3,
-      0x81,
-      0x82,
-      0x06,
-      0x3A,
-      0x06,
-      0x45,
-      0x54,
-    ]),
+    l("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
     "あ",
   );
   // TODO
   // assertEquals(
-  //   l([
-  //     0x04,
-  //     0x08,
-  //     0x49,
-  //     0x3A,
-  //     0x07,
-  //     0x82,
-  //     0xA0,
-  //     0x06,
-  //     0x3A,
-  //     0x0D,
-  //     0x65, // e
-  //     0x6E, // n
-  //     0x63, // c
-  //     0x6F, // o
-  //     0x64, // d
-  //     0x69, // i
-  //     0x6E, // n
-  //     0x67, // g
-  //     0x22,
-  //     0x10,
-  //     0x57, // W
-  //     0x69, // i
-  //     0x6E, // n
-  //     0x64, // d
-  //     0x6F, // o
-  //     0x77, // w
-  //     0x73, // s
-  //     0x2D, // -
-  //     0x33, // 3
-  //     0x31, // 1
-  //     0x4A, // J
-  //   ]),
+  //   ll(
+  //     "\x04\x08",
+  //     "I:",
+  //     2,
+  //     "\x82\xA0",
+  //     1,
+  //     ":",
+  //     8,
+  //     "encoding",
+  //     '"',
+  //     11,
+  //     "Windows-31J",
+  //   ),
   //   RSymbol(Uint8Array.from([0x82, 0xA0]), {
   //     encoding: findEncoding("Windows-31J")!,
   //   }),
@@ -579,22 +272,7 @@ Deno.test("load loads Symbol", () => {
 Deno.test("load rejects invalid Symbol", () => {
   // Redundant E=false clause
   assertThrows(
-    () =>
-      l([
-        0x04,
-        0x08,
-        0x49,
-        0x3A,
-        0x08,
-        0x66,
-        0x6F,
-        0x6F,
-        0x06,
-        0x3A,
-        0x06,
-        0x45,
-        0x46,
-      ]),
+    () => l("\x04\x08", "I:", 3, "foo", 1, ":", 1, "EF"),
     SyntaxError,
   );
 });
