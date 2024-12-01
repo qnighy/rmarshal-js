@@ -1,5 +1,6 @@
 import { REncoding } from "./encoding/mod.ts";
 import { WeakValueMap } from "../weak-value-map.ts";
+import { freezeProperties } from "../utils.ts";
 
 export type RSymbol = string | RExoticSymbol;
 
@@ -23,15 +24,31 @@ export function RSymbol(
 
 RSymbol.encodingOf = (symbol: RSymbol): REncoding => {
   if (typeof symbol === "string") {
-    for (let i = 0; i < symbol.length; i++) {
-      if (symbol.charCodeAt(i) >= 0x80) {
-        return REncoding.UTF_8;
-      }
-    }
-    return REncoding.US_ASCII;
+    // deno-lint-ignore no-control-regex
+    return /^[\u0000-\u00FF]*$/.test(symbol)
+      ? REncoding.US_ASCII
+      : REncoding.UTF_8;
   }
   return symbol.encoding;
 };
+
+RSymbol.bytesOf = (symbol: RSymbol): Uint8Array => {
+  if (typeof symbol === "string") {
+    return new TextEncoder().encode(symbol);
+  }
+  return Uint8Array.from(symbol.bytes);
+};
+
+RSymbol.expand = (
+  symbol: RSymbol,
+): { encoding: REncoding; bytes: Uint8Array } => {
+  return {
+    encoding: RSymbol.encodingOf(symbol),
+    bytes: RSymbol.bytesOf(symbol),
+  };
+};
+
+freezeProperties(RSymbol);
 
 const PRIVATE_KEY: unknown = {};
 
