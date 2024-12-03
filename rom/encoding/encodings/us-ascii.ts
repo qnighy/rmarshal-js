@@ -1,8 +1,17 @@
-import { type EncodingImpl, EncodingRegistration } from "../common-internal.ts";
+import {
+  Char,
+  type EncodingImpl,
+  EncodingRegistration,
+} from "../common-internal.ts";
 
 const US_ASCII_IMPL: EncodingImpl = {
-  delimit(bytes, pos) {
-    return bytes[pos] < 0x80 ? 1 : -1;
+  asciiCompatible: true,
+
+  *chars(bytes: Uint8Array): IterableIterator<Char> {
+    for (let i = 0; i < bytes.length; i++) {
+      const valid = bytes[i] < 0x80;
+      yield Char(i, i + 1, valid, bytes[i]);
+    }
   },
 };
 

@@ -14,8 +14,8 @@ export function RSymbol(
   if (!encoding.isValidBytes(bytes)) {
     throw new TypeError("Got an invalid byte sequence as a symbol source");
   }
-  const asciiCompat = true;
-  const isASCII = asciiCompat && bytes.every((byte) => byte < 0x80);
+  const isASCII = encoding.asciiCompatible &&
+    bytes.every((byte) => byte < 0x80);
   if (isASCII || encoding === REncoding.UTF_8) {
     return new TextDecoder("utf-8").decode(bytes);
   }

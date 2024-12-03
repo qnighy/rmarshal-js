@@ -1,51 +1,60 @@
-import { type EncodingImpl, EncodingRegistration } from "../common-internal.ts";
+import {
+  Char,
+  type EncodingImpl,
+  EncodingRegistration,
+} from "../common-internal.ts";
 
 const UTF_8_IMPL: EncodingImpl = {
-  delimit(bytes, pos) {
-    const ch0 = bytes[pos];
-    if (ch0 < 0x80) {
-      return 1;
-    } else if (ch0 < 0xC2) {
-      return -1;
-    } else if (ch0 < 0xE0) {
-      return pos + 1 < bytes.length && (bytes[pos + 1] & 0xC0) === 0x80
-        ? 2
-        : -1;
-    } else if (ch0 < 0xF0) {
-      if (pos + 2 >= bytes.length) {
-        return -1;
+  asciiCompatible: true,
+
+  *chars(bytes: Uint8Array): IterableIterator<Char> {
+    let pos = 0;
+    while (pos < bytes.length) {
+      const start = pos;
+      const b0 = bytes[pos++];
+      if (b0 < 0x80) {
+        yield Char(start, pos, true, b0);
+        continue;
+      } else if (b0 < 0xC2) {
+        // failure
+      } else if (b0 < 0xE0) {
+        const b1 = bytes[pos++] ?? 0;
+        if ((b1 & 0xC0) === 0x80) {
+          yield Char(start, pos, true, ((b0 & 0x1F) << 6) | (b1 & 0x3F));
+          continue;
+        }
+      } else if (b0 < 0xF0) {
+        const b1 = bytes[pos++] ?? 0;
+        const b2 = bytes[pos++] ?? 0;
+        if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
+          const unicode = ((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) |
+            (b2 & 0x3F);
+          if (
+            (0x0800 <= unicode && unicode < 0xD800) || 0xE000 <= unicode
+          ) {
+            yield Char(start, pos, true, unicode);
+            continue;
+          }
+        }
+      } else if (b0 < 0xF5) {
+        const b1 = bytes[pos++] ?? 0;
+        const b2 = bytes[pos++] ?? 0;
+        const b3 = bytes[pos++] ?? 0;
+        if (
+          (b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80
+        ) {
+          const unicode = ((b0 & 0x07) << 18) | ((b1 & 0x3F) << 12) |
+            ((b2 & 0x3F) << 6) | (b3 & 0x3F);
+          if (0x10000 <= unicode && unicode < 0x110000) {
+            yield Char(start, pos, true, unicode);
+            continue;
+          }
+        }
       }
-      const ch1 = bytes[pos + 1];
-      if ((ch1 & 0xC0) !== 0x80) {
-        return -1;
-      }
-      if (ch0 === 0xE0 && ch1 < 0xA0) {
-        return -1;
-      }
-      if (ch0 === 0xED && ch1 >= 0xA0) {
-        return -1;
-      }
-      const ch2 = bytes[pos + 2];
-      return (ch2 & 0xC0) === 0x80 ? 3 : -1;
-    } else if (ch0 < 0xF5) {
-      if (pos + 3 >= bytes.length) {
-        return -1;
-      }
-      const ch1 = bytes[pos + 1];
-      if ((ch1 & 0xC0) !== 0x80) {
-        return -1;
-      }
-      if (ch0 === 0xF0 && ch1 < 0x90) {
-        return -1;
-      }
-      if (ch0 === 0xF4 && ch1 >= 0x90) {
-        return -1;
-      }
-      const ch2 = bytes[pos + 2];
-      const ch3 = bytes[pos + 3];
-      return (ch2 & 0xC0) === 0x80 && (ch3 & 0xC0) === 0x80 ? 4 : -1;
+      // failure case
+      pos = start + 1;
+      yield Char(start, pos, false);
     }
-    return -1;
   },
 };
 
