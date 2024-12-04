@@ -1,9 +1,9 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { REncoding, type RObject, RSymbol } from "./rom.ts";
+import { REncoding, RSymbol, type RValue } from "./rom.ts";
 import { load } from "./load.ts";
 import { seq, type SeqElement } from "./testutil.ts";
 
-function l(...elems: SeqElement[]): RObject {
+function l(...elems: SeqElement[]): RValue {
   return load(seq(...elems));
 }
 

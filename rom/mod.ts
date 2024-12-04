@@ -8,7 +8,7 @@ export type RFloat = number;
 export type RNil = null;
 export type RBoolean = boolean;
 
-export type RObject =
+export type RValue =
   | RNil
   | RInteger
   | RFloat

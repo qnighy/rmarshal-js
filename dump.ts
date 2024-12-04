@@ -1,15 +1,15 @@
-import { REncoding, RExoticSymbol, type RObject, RSymbol } from "./rom.ts";
+import { REncoding, RExoticSymbol, RSymbol, type RValue } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
 
-export function dump(value: RObject): Uint8Array {
+export function dump(value: RValue): Uint8Array {
   const dumper = new Dumper();
   dumper.writeTopLevel(value);
   return dumper.result();
 }
 
-export function dumpAll(values: RObject[]): Uint8Array {
+export function dumpAll(values: RValue[]): Uint8Array {
   const dumper = new Dumper();
   for (const value of values) {
     dumper.writeTopLevel(value);
@@ -25,13 +25,13 @@ class Dumper {
     return this.#buf.subarray(0, this.#pos);
   }
 
-  writeTopLevel(value: RObject) {
+  writeTopLevel(value: RValue) {
     this.#writeByte(MARSHAL_MAJOR);
     this.#writeByte(MARSHAL_MINOR);
     this.#writeObject(value);
   }
 
-  #writeObject(value: RObject) {
+  #writeObject(value: RValue) {
     if (value === null) {
       this.#writeByte(0x30); // '0'
     } else if (typeof value === "boolean") {

@@ -1,9 +1,9 @@
-import { REncoding, type RObject, RSymbol } from "./rom.ts";
+import { REncoding, RSymbol, type RValue } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
 
-export function load(buf: Uint8Array): RObject {
+export function load(buf: Uint8Array): RValue {
   const loader = new Loader(buf);
   const value = loader.readTopLevel();
   if (loader.rest().length > 0) {
@@ -11,13 +11,13 @@ export function load(buf: Uint8Array): RObject {
   }
   return value;
 }
-export function* loadStream(buf: Uint8Array): IterableIterator<RObject> {
+export function* loadStream(buf: Uint8Array): IterableIterator<RValue> {
   const loader = new Loader(buf);
   while (loader.hasRest()) {
     yield loader.readTopLevel();
   }
 }
-export function loadNext(buf: Uint8Array): [RObject, Uint8Array] {
+export function loadNext(buf: Uint8Array): [RValue, Uint8Array] {
   const loader = new Loader(buf);
   const value = loader.readTopLevel();
   return [value, loader.rest()];
@@ -39,7 +39,7 @@ export class Loader {
     return this.#buf.subarray(this.#pos);
   }
 
-  readTopLevel(): RObject {
+  readTopLevel(): RValue {
     const major = this.#readByte();
     const minor = this.#readByte();
     if (major !== MARSHAL_MAJOR || minor > MARSHAL_MINOR) {
@@ -50,7 +50,7 @@ export class Loader {
     return this.#readObject();
   }
 
-  #readObject(): RObject {
+  #readObject(): RValue {
     const type = this.#readByte();
     switch (type) {
       case 0x30: // '0'
@@ -76,7 +76,7 @@ export class Loader {
     }
   }
 
-  #readObjectWithIvars(): RObject {
+  #readObjectWithIvars(): RValue {
     const type = this.#readByte();
     switch (type) {
       case 0x3A: // ':'
