@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { REncoding, RSymbol } from "./rom.ts";
+import { REncoding, RObject, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 import { seq } from "./testutil.ts";
 
@@ -156,4 +156,27 @@ Deno.test("dump dumps Symbol", () => {
   //     "Windows-31J",
   //   ),
   // );
+});
+
+Deno.test("dump dumps Object", () => {
+  assertEquals(
+    dump(new RObject("Object")),
+    seq("\x04\x08", "o:", 6, "Object", 0),
+  );
+  assertEquals(
+    dump(
+      new RObject("MyClass", {
+        "@foo": 42n,
+        "@bar": "baz",
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "o",
+      ...[":", 7, "MyClass"],
+      2,
+      ...[":", 4, "@foo", "i", 42],
+      ...[":", 4, "@bar", ":", 3, "baz"],
+    ),
+  );
 });

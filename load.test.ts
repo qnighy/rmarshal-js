@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { REncoding, RSymbol, type RValue } from "./rom.ts";
+import { REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
 import { load } from "./load.ts";
 import { seq, type SeqElement } from "./testutil.ts";
 
@@ -274,5 +274,23 @@ Deno.test("load rejects invalid Symbol", () => {
   assertThrows(
     () => l("\x04\x08", "I:", 3, "foo", 1, ":", 1, "EF"),
     SyntaxError,
+  );
+});
+
+Deno.test("load loads Object", () => {
+  assertEquals(
+    l("\x04\x08", "o:", 6, "Object", 0),
+    new RObject("Object"),
+  );
+  assertEquals(
+    l(
+      "\x04\x08",
+      "o",
+      ...[":", 7, "MyClass"],
+      2,
+      ...[":", 4, "@foo", "i", 42],
+      ...[":", 4, "@bar", ":", 3, "baz"],
+    ),
+    new RObject("MyClass", { "@foo": 42n, "@bar": "baz" }),
   );
 });

@@ -1,4 +1,4 @@
-import { REncoding, RSymbol, type RValue } from "./rom.ts";
+import { REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -47,10 +47,10 @@ export class Loader {
         `Unsupported marshal version: ${major}.${minor} (expected ${MARSHAL_MAJOR}.0 to ${MARSHAL_MAJOR}.${MARSHAL_MINOR})`,
       );
     }
-    return this.#readObject();
+    return this.#readValue();
   }
 
-  #readObject(): RValue {
+  #readValue(): RValue {
     const type = this.#readByte();
     switch (type) {
       case 0x30: // '0'
@@ -69,6 +69,8 @@ export class Loader {
         return this.#readSymbol(false);
       case 0x49: // 'I'
         return this.#readObjectWithIvars();
+      case 0x6F: // 'o'
+        return this.#readObject();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
@@ -148,6 +150,8 @@ export class Loader {
         return "Symbol";
       case 0x49: // 'I'
         return "Instance variable container";
+      case 0x6F: // 'o'
+        return "Object";
     }
   }
 
@@ -211,7 +215,7 @@ export class Loader {
       );
     }
     const key = this.#readKey();
-    const value = this.#readObject();
+    const value = this.#readValue();
     let encoding: REncoding;
     switch (key) {
       case "E":
@@ -248,6 +252,29 @@ export class Loader {
       throw new SyntaxError("Redundant encoding specifier in ASCII Symbol");
     }
     return sym;
+  }
+
+  #readObject(): RObject {
+    const className = this.#readKey();
+    const numIvars = this.#readUFixnum();
+    const obj = new RObject(className);
+    for (let i = 0; i < numIvars; i++) {
+      const key = this.#readKey();
+      const value = this.#readValue();
+      const ivarName = RSymbol.asIvarName(key);
+      if (ivarName == null) {
+        throw new SyntaxError(
+          `Not allowed as an instance variable name: ${key}`,
+        );
+      }
+      if (ivarName in obj) {
+        throw new SyntaxError(
+          `Duplicate instance variable name: ${key}`,
+        );
+      }
+      obj[ivarName] = value;
+    }
+    return obj;
   }
 
   #readByteSlice(): Uint8Array {

@@ -12,7 +12,7 @@ export class RObject {
    * The name of the class this object belongs to
    * in its canonical form.
    */
-  readonly className: string;
+  readonly className: RSymbol;
   /**
    * The instance variables of this object.
    *
@@ -23,13 +23,19 @@ export class RObject {
    */
   [key: IvarName]: RValue;
 
-  constructor(className: string) {
+  constructor(
+    className: RSymbol,
+    ivars: Record<IvarName, RValue> = {},
+  ) {
     this.className = className;
     Object.defineProperty(this, "className", {
       configurable: false,
       writable: false,
-      enumerable: false,
     });
+
+    for (const [key, value] of Object.entries(ivars)) {
+      this[key as IvarName] = value;
+    }
   }
 
   *ivars(): IterableIterator<[RSymbol, RValue]> {

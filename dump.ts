@@ -1,4 +1,10 @@
-import { REncoding, RExoticSymbol, RSymbol, type RValue } from "./rom.ts";
+import {
+  REncoding,
+  RExoticSymbol,
+  RObject,
+  RSymbol,
+  type RValue,
+} from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -28,10 +34,10 @@ class Dumper {
   writeTopLevel(value: RValue) {
     this.#writeByte(MARSHAL_MAJOR);
     this.#writeByte(MARSHAL_MINOR);
-    this.#writeObject(value);
+    this.#writeValue(value);
   }
 
-  #writeObject(value: RValue) {
+  #writeValue(value: RValue) {
     if (value === null) {
       this.#writeByte(0x30); // '0'
     } else if (typeof value === "boolean") {
@@ -51,6 +57,8 @@ class Dumper {
       this.#writeSymbolObject(value);
     } else if (value instanceof RExoticSymbol) {
       this.#writeSymbolObject(value);
+    } else if (value instanceof RObject) {
+      this.#writeObject(value);
     } else {
       throw new TypeError(`Unsupported type: ${typeof value}`);
     }
@@ -104,6 +112,25 @@ class Dumper {
         this.#writeSymbolObject("encoding");
         throw new Error("TODO: exotic enodings");
       }
+    }
+  }
+
+  #writeObject(value: RObject) {
+    this.#writeByte(0x6F); // 'o'
+    this.#writeSymbolObject(value.className);
+    let numIvars = 0;
+    // deno-lint-ignore no-empty-pattern
+    for (const [] of value.ivars()) {
+      numIvars++;
+    }
+    this.#writeFixnum(numIvars);
+    for (const [key, val] of value.ivars()) {
+      --numIvars;
+      this.#writeSymbolObject(key);
+      this.#writeValue(val);
+    }
+    if (numIvars !== 0) {
+      throw new Error("Ivar count mismatch");
     }
   }
 
