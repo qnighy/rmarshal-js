@@ -48,6 +48,95 @@ RSymbol.expand = (
   };
 };
 
+/**
+ * Precise format:
+ *
+ * - Ordinary symbol: `@` + Identifier
+ * - Exotic symbol: `@` + Identifier in x-user-defined encoding + `/` + Encoding name
+ *
+ * See {@link https://encoding.spec.whatwg.org/#x-user-defined} for the definition of x-user-defined encoding.
+ */
+export type IvarName = `@${string}`;
+
+RSymbol.asIvarName = (symbol: RSymbol): IvarName | undefined => {
+  if (typeof symbol === "string") {
+    if (
+      /^@[a-zA-Z_\u0080-\u{10FFFF}][a-zA-Z_\u0080-\u{10FFFF}0-9]*$/u.test(
+        symbol,
+      )
+    ) {
+      return symbol as `@${string}`;
+    } else {
+      return undefined;
+    }
+  }
+  const bytes = symbol.bytes;
+  if (
+    symbol.encoding.asciiCompatible &&
+    bytes.length >= 2 &&
+    bytes[0] === 0x40 &&
+    isIdStartByte(bytes[1]) &&
+    bytes.every((byte, i) => i < 2 || isIdByte(byte))
+  ) {
+    const repr = embedXUserDefined(bytes) as `@${string}`;
+    return `${repr}/${symbol.encoding.name}`;
+  } else {
+    return undefined;
+  }
+};
+
+RSymbol.fromIvarName = (name: IvarName): RSymbol => {
+  if (name[0] !== "@") {
+    throw new TypeError("Invalid ivar name");
+  }
+  const slashPos = name.indexOf("/");
+  if (slashPos === -1) {
+    // Ordinary symbol representation
+    return name;
+  } else {
+    // Exotic symbol representation
+    const symbolBytes = extractXUserDefined(name.slice(0, slashPos));
+    const encoding = REncoding.find(name.slice(slashPos + 1));
+    return new RExoticSymbol(
+      PRIVATE_KEY,
+      Uint8Array.from(symbolBytes),
+      encoding,
+    );
+  }
+};
+
+function isIdStartByte(byte: number): boolean {
+  return (
+    (0x41 <= byte && byte <= 0x5A) ||
+    (0x61 <= byte && byte <= 0x7A) ||
+    byte === 0x5F ||
+    byte >= 0x80
+  );
+}
+
+function isIdByte(byte: number): boolean {
+  return isIdStartByte(byte) || (0x30 <= byte && byte <= 0x39);
+}
+
+function embedXUserDefined(bytes: readonly number[]): string {
+  return String.fromCharCode(
+    ...bytes.map((byte) => byte < 0x80 ? byte : byte + 0xF700),
+  );
+}
+
+function extractXUserDefined(repr: string): number[] {
+  return Array.from(repr).map((char) => {
+    const cp = char.codePointAt(0)!;
+    if (cp < 0x80) {
+      return cp;
+    } else if (0xF780 <= cp && cp < 0xF800) {
+      return cp - 0xF700;
+    } else {
+      throw new TypeError("Invalid X-user-defined character");
+    }
+  });
+}
+
 freezeProperties(RSymbol);
 
 const PRIVATE_KEY: unknown = {};
