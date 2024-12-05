@@ -27,12 +27,14 @@ export function dumpAll(values: RValue[]): Uint8Array {
 class Dumper {
   #buf = new Uint8Array(8);
   #pos = 0;
+  #symbols!: Map<RSymbol, number>;
 
   result(): Uint8Array {
     return this.#buf.subarray(0, this.#pos);
   }
 
   writeTopLevel(value: RValue) {
+    this.#symbols = new Map<RSymbol, number>();
     this.#writeByte(MARSHAL_MAJOR);
     this.#writeByte(MARSHAL_MINOR);
     this.#writeValue(value);
@@ -96,6 +98,14 @@ class Dumper {
   }
 
   #writeSymbolObject(value: RSymbol) {
+    const symlinkId = this.#symbols.get(value);
+    if (symlinkId != null) {
+      this.#writeByte(0x3B); // ';'
+      this.#writeFixnum(symlinkId);
+      return;
+    }
+    this.#symbols.set(value, this.#symbols.size);
+
     const encoding = RSymbol.encodingOf(value);
     const bytes = typeof value === "string"
       ? new TextEncoder().encode(value)

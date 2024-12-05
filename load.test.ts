@@ -277,6 +277,38 @@ Deno.test("load rejects invalid Symbol", () => {
   );
 });
 
+Deno.test("load loads Symbol link", () => {
+  assertEquals(
+    l("\x04\x08", "[", 2, ":", 3, "foo", ";", 0),
+    new RArray(["foo", "foo"]),
+  );
+  assertEquals(
+    l("\x04\x08", "[", 4, ":", 3, "foo", ":", 3, "bar", ";", 1, ";", 0),
+    new RArray(["foo", "bar", "bar", "foo"]),
+  );
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      3,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...[";", 0],
+      ...[";", 1],
+    ),
+    new RArray(["あ", "あ", "E"]),
+  );
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      2,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...["I:", 3, "\xE3\x81\x84", 1, ";", 1, "T"],
+    ),
+    new RArray(["あ", "い"]),
+  );
+});
+
 Deno.test("load loads Object", () => {
   assertEquals(
     l("\x04\x08", "o:", 6, "Object", 0),

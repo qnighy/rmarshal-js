@@ -158,6 +158,38 @@ Deno.test("dump dumps Symbol", () => {
   // );
 });
 
+Deno.test("dump dumps Symbol link", () => {
+  assertEquals(
+    dump(new RArray(["foo", "foo"])),
+    seq("\x04\x08", "[", 2, ":", 3, "foo", ";", 0),
+  );
+  assertEquals(
+    dump(new RArray(["foo", "bar", "bar", "foo"])),
+    seq("\x04\x08", "[", 4, ":", 3, "foo", ":", 3, "bar", ";", 1, ";", 0),
+  );
+  assertEquals(
+    dump(new RArray(["あ", "あ", "E"])),
+    seq(
+      "\x04\x08",
+      "[",
+      3,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...[";", 0],
+      ...[";", 1],
+    ),
+  );
+  assertEquals(
+    dump(new RArray(["あ", "い"])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...["I:", 3, "\xE3\x81\x84", 1, ";", 1, "T"],
+    ),
+  );
+});
+
 Deno.test("dump dumps Object", () => {
   assertEquals(
     dump(new RObject("Object")),

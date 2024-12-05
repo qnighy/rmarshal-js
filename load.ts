@@ -26,6 +26,8 @@ export function loadNext(buf: Uint8Array): [RValue, Uint8Array] {
 export class Loader {
   #buf: Uint8Array;
   #pos = 0;
+  #symbols!: (RSymbol | undefined)[];
+  #visitedSymbols!: Set<RSymbol>;
 
   constructor(buf: Uint8Array) {
     this.#buf = buf;
@@ -40,6 +42,8 @@ export class Loader {
   }
 
   readTopLevel(): RValue {
+    this.#symbols = [];
+    this.#visitedSymbols = new Set();
     const major = this.#readByte();
     const minor = this.#readByte();
     if (major !== MARSHAL_MAJOR || minor > MARSHAL_MINOR) {
@@ -67,6 +71,8 @@ export class Loader {
         return this.#readFloatBody();
       case 0x3A: // ':'
         return this.#readSymbolBody(false);
+      case 0x3B: // ';'
+        return this.#readSymlinkBody();
       case 0x49: // 'I'
         return this.#readInIvarContainer();
       case 0x6F: // 'o'
@@ -100,6 +106,8 @@ export class Loader {
     switch (type) {
       case 0x3A: // ':'
         return this.#readSymbolBody(false);
+      case 0x3B: // ';'
+        return this.#readSymlinkBody();
       case 0x49: { // 'I'
         const subtype = this.#readByte();
         switch (subtype) {
@@ -150,6 +158,8 @@ export class Loader {
         return "Float";
       case 0x3A: // ':'
         return "Symbol";
+      case 0x3B: // ';'
+        return "Symbol link";
       case 0x49: // 'I'
         return "Instance variable container";
       case 0x6F: // 'o'
@@ -208,6 +218,19 @@ export class Loader {
   }
 
   #readSymbolBody(hasIvar: boolean): RSymbol {
+    const symbolId = this.#symbols.length;
+    this.#symbols.push(undefined);
+
+    const sym = this.#readSymbolBodyImpl(hasIvar);
+    this.#symbols[symbolId] = sym;
+    if (this.#visitedSymbols.has(sym)) {
+      throw new SyntaxError("Same symbol appeared twice");
+    }
+    this.#visitedSymbols.add(sym);
+    return sym;
+  }
+
+  #readSymbolBodyImpl(hasIvar: boolean): RSymbol {
     const bytes = this.#readByteSlice();
     if (!hasIvar) {
       return RSymbol(bytes, REncoding.ASCII_8BIT);
@@ -254,6 +277,18 @@ export class Loader {
     const sym = RSymbol(bytes, encoding);
     if (RSymbol.encodingOf(sym) !== encoding) {
       throw new SyntaxError("Redundant encoding specifier in ASCII Symbol");
+    }
+    return sym;
+  }
+
+  #readSymlinkBody(): RSymbol {
+    const symbolId = this.#readLength();
+    if (symbolId >= this.#symbols.length) {
+      throw new SyntaxError("Invalid symbol link");
+    }
+    const sym = this.#symbols[symbolId];
+    if (sym == null) {
+      throw new SyntaxError("Circular symbol link");
     }
     return sym;
   }
