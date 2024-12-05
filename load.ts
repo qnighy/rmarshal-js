@@ -60,19 +60,19 @@ export class Loader {
       case 0x54: // 'T'
         return true;
       case 0x69: // 'i'
-        return BigInt(this.#readFixnum());
+        return BigInt(this.#readFixnumBody());
       case 0x6C: // 'l'
-        return this.#readBignum();
+        return this.#readBignumBody();
       case 0x66: // 'f'
-        return this.#readFloat();
+        return this.#readFloatBody();
       case 0x3A: // ':'
-        return this.#readSymbol(false);
+        return this.#readSymbolBody(false);
       case 0x49: // 'I'
-        return this.#readObjectWithIvars();
+        return this.#readInIvarContainer();
       case 0x6F: // 'o'
-        return this.#readObject();
+        return this.#readObjectBody();
       case 0x5B: // '['
-        return this.#readArray();
+        return this.#readArrayBody();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
@@ -80,11 +80,11 @@ export class Loader {
     }
   }
 
-  #readObjectWithIvars(): RValue {
+  #readInIvarContainer(): RValue {
     const type = this.#readByte();
     switch (type) {
       case 0x3A: // ':'
-        return this.#readSymbol(true);
+        return this.#readSymbolBody(true);
       case 0x49: // 'I'
         throw new SyntaxError("Nested instance variable container");
       default:
@@ -95,16 +95,16 @@ export class Loader {
     }
   }
 
-  #readKey(): RSymbol {
+  #readSymbol(): RSymbol {
     const type = this.#readByte();
     switch (type) {
       case 0x3A: // ':'
-        return this.#readSymbol(false);
+        return this.#readSymbolBody(false);
       case 0x49: { // 'I'
         const subtype = this.#readByte();
         switch (subtype) {
           case 0x3A: // ':'
-            return this.#readSymbol(true);
+            return this.#readSymbolBody(true);
           case 0x49: // 'I'
             throw new SyntaxError("Nested instance variable container");
           default:
@@ -159,12 +159,12 @@ export class Loader {
     }
   }
 
-  #readBignum(): bigint {
+  #readBignumBody(): bigint {
     const signByte = this.#readByte();
     if (signByte !== 0x2B && signByte !== 0x2D) {
       throw new SyntaxError("Invalid Bignum sign byte");
     }
-    const numWords = this.#readUFixnum();
+    const numWords = this.#readLength();
     let value = 0n;
     for (let i = 0; i < numWords * 2; i++) {
       value |= BigInt(this.#readByte()) << (BigInt(i) * 8n);
@@ -186,7 +186,7 @@ export class Loader {
     return value;
   }
 
-  #readFloat(): number {
+  #readFloatBody(): number {
     const text = new TextDecoder().decode(this.#readByteSlice());
     switch (text) {
       case "nan":
@@ -207,18 +207,18 @@ export class Loader {
     }
   }
 
-  #readSymbol(hasIvar: boolean): RSymbol {
+  #readSymbolBody(hasIvar: boolean): RSymbol {
     const bytes = this.#readByteSlice();
     if (!hasIvar) {
       return RSymbol(bytes, REncoding.ASCII_8BIT);
     }
-    const numIvars = this.#readUFixnum();
+    const numIvars = this.#readLength();
     if (numIvars !== 1) {
       throw new SyntaxError(
         "Complex symbol must have exactly one instance variable",
       );
     }
-    const key = this.#readKey();
+    const key = this.#readSymbol();
     const value = this.#readValue();
     let encoding: REncoding;
     switch (key) {
@@ -258,12 +258,12 @@ export class Loader {
     return sym;
   }
 
-  #readObject(): RObject {
-    const className = this.#readKey();
-    const numIvars = this.#readUFixnum();
+  #readObjectBody(): RObject {
+    const className = this.#readSymbol();
+    const numIvars = this.#readLength();
     const obj = new RObject(className);
     for (let i = 0; i < numIvars; i++) {
-      const key = this.#readKey();
+      const key = this.#readSymbol();
       const value = this.#readValue();
       const ivarName = RSymbol.asIvarName(key);
       if (ivarName == null) {
@@ -281,8 +281,8 @@ export class Loader {
     return obj;
   }
 
-  #readArray(): RArray {
-    const numElems = this.#readUFixnum();
+  #readArrayBody(): RArray {
+    const numElems = this.#readLength();
     const arr = new RArray();
     for (let i = 0; i < numElems; i++) {
       arr.elements.push(this.#readValue());
@@ -291,7 +291,7 @@ export class Loader {
   }
 
   #readByteSlice(): Uint8Array {
-    const length = this.#readUFixnum();
+    const length = this.#readLength();
     if (this.#pos + length > this.#buf.length) {
       throw new SyntaxError("Unexpected end of input");
     }
@@ -300,15 +300,15 @@ export class Loader {
     return slice;
   }
 
-  #readUFixnum(): number {
-    const value = this.#readFixnum();
+  #readLength(): number {
+    const value = this.#readFixnumBody();
     if (value < 0) {
       throw new SyntaxError("Received a negative integer");
     }
     return value;
   }
 
-  #readFixnum(): number {
+  #readFixnumBody(): number {
     const first = this.#readByte();
     if (first === 0) {
       return 0;
