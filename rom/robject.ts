@@ -45,4 +45,13 @@ export class RObject {
       }
     }
   }
+
+  get numIvars(): number {
+    let numIvars = 0;
+    // deno-lint-ignore no-empty-pattern
+    for (const [] of this.ivars()) {
+      numIvars++;
+    }
+    return numIvars;
+  }
 }

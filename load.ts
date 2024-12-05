@@ -1,4 +1,4 @@
-import { REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
+import { RArray, REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
 
 const MARSHAL_MAJOR = 4;
 const MARSHAL_MINOR = 8;
@@ -71,6 +71,8 @@ export class Loader {
         return this.#readObjectWithIvars();
       case 0x6F: // 'o'
         return this.#readObject();
+      case 0x5B: // '['
+        return this.#readArray();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
@@ -152,6 +154,8 @@ export class Loader {
         return "Instance variable container";
       case 0x6F: // 'o'
         return "Object";
+      case 0x5B: // '['
+        return "Array";
     }
   }
 
@@ -275,6 +279,15 @@ export class Loader {
       obj[ivarName] = value;
     }
     return obj;
+  }
+
+  #readArray(): RArray {
+    const numElems = this.#readUFixnum();
+    const arr = new RArray();
+    for (let i = 0; i < numElems; i++) {
+      arr.elements.push(this.#readValue());
+    }
+    return arr;
   }
 
   #readByteSlice(): Uint8Array {

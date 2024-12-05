@@ -1,4 +1,5 @@
 import {
+  RArray,
   REncoding,
   RExoticSymbol,
   RObject,
@@ -57,6 +58,8 @@ class Dumper {
       this.#writeSymbolObject(value);
     } else if (value instanceof RExoticSymbol) {
       this.#writeSymbolObject(value);
+    } else if (value instanceof RArray) {
+      this.#writeArray(value);
     } else if (value instanceof RObject) {
       this.#writeObject(value);
     } else {
@@ -118,11 +121,7 @@ class Dumper {
   #writeObject(value: RObject) {
     this.#writeByte(0x6F); // 'o'
     this.#writeSymbolObject(value.className);
-    let numIvars = 0;
-    // deno-lint-ignore no-empty-pattern
-    for (const [] of value.ivars()) {
-      numIvars++;
-    }
+    let numIvars = value.numIvars;
     this.#writeFixnum(numIvars);
     for (const [key, val] of value.ivars()) {
       --numIvars;
@@ -131,6 +130,26 @@ class Dumper {
     }
     if (numIvars !== 0) {
       throw new Error("Ivar count mismatch");
+    }
+  }
+
+  #writeArray(value: RArray) {
+    if (value.className !== "Array") {
+      throw new Error("TODO: subclass of Array");
+    }
+    if (value.numIvars !== 0) {
+      throw new Error("TODO: ivars in Array");
+    }
+
+    this.#writeByte(0x5B); // '['
+    let length = +value.elements.length;
+    this.#writeFixnum(length);
+    for (const elem of value.elements) {
+      --length;
+      this.#writeValue(elem);
+    }
+    if (length !== 0) {
+      throw new Error("Array length mismatch");
     }
   }
 

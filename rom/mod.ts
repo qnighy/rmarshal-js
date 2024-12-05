@@ -1,9 +1,11 @@
 import type { REncoding } from "./encoding.ts";
 import type { RSymbol } from "./rsymbol.ts";
 import type { RObject } from "./robject.ts";
+import type { RArray } from "./rarray.ts";
 export * from "./encoding.ts";
 export * from "./rsymbol.ts";
 export * from "./robject.ts";
+export * from "./rarray.ts";
 
 export type RInteger = bigint;
 export type RFloat = number;
@@ -17,4 +19,5 @@ export type RValue =
   | RBoolean
   | REncoding
   | RSymbol
-  | RObject;
+  | RObject
+  | RArray;

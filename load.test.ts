@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
+import { RArray, REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
 import { load } from "./load.ts";
 import { seq, type SeqElement } from "./testutil.ts";
 
@@ -293,4 +293,9 @@ Deno.test("load loads Object", () => {
     ),
     new RObject("MyClass", { "@foo": 42n, "@bar": "baz" }),
   );
+});
+
+Deno.test("load loads Array", () => {
+  assertEquals(l("\x04\x08", "[", 0), new RArray([]));
+  assertEquals(l("\x04\x08", "[", 2, "i", 42, "0"), new RArray([42n, null]));
 });
