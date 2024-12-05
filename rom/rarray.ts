@@ -1,5 +1,5 @@
 import type { RValue } from "./mod.ts";
-import { RObject } from "./robject.ts";
+import { WithIvars } from "./robject.ts";
 import type { IvarName, RSymbol } from "./rsymbol.ts";
 
 export type RArrayOptions = {
@@ -10,7 +10,7 @@ export type RArrayOptions = {
 /**
  * Instances of Ruby's Array class or its subclasses.
  */
-export class RArray extends RObject {
+export class RArray extends WithIvars {
   /**
    * The elements of this array.
    */

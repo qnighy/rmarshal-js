@@ -58,10 +58,10 @@ class Dumper {
       this.#writeSymbolObject(value);
     } else if (value instanceof RExoticSymbol) {
       this.#writeSymbolObject(value);
-    } else if (value instanceof RArray) {
-      this.#writeArray(value);
     } else if (value instanceof RObject) {
       this.#writeObject(value);
+    } else if (value instanceof RArray) {
+      this.#writeArray(value);
     } else {
       throw new TypeError(`Unsupported type: ${typeof value}`);
     }

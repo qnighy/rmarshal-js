@@ -2,17 +2,28 @@ import type { RValue } from "./mod.ts";
 import { type IvarName, RSymbol } from "./rsymbol.ts";
 
 /**
- * a general Ruby object with instance variables.
- *
- * Note that, inheritance hierarchy in Ruby
- * is not represented as the one in JavaScript.
+ * Abstract class for Ruby objects with configurable class name.
  */
-export class RObject {
+export abstract class WithClassName {
   /**
    * The name of the class this object belongs to
    * in its canonical form.
    */
   readonly className: RSymbol;
+
+  constructor(className: RSymbol) {
+    this.className = className;
+    Object.defineProperty(this, "className", {
+      configurable: false,
+      writable: false,
+    });
+  }
+}
+
+/**
+ * Abstract class for Ruby objects with instance variables.
+ */
+export abstract class WithIvars extends WithClassName {
   /**
    * The instance variables of this object.
    *
@@ -27,11 +38,7 @@ export class RObject {
     className: RSymbol,
     ivars: Record<IvarName, RValue> = {},
   ) {
-    this.className = className;
-    Object.defineProperty(this, "className", {
-      configurable: false,
-      writable: false,
-    });
+    super(className);
 
     for (const [key, value] of Object.entries(ivars)) {
       this[key as IvarName] = value;
@@ -54,4 +61,13 @@ export class RObject {
     }
     return numIvars;
   }
+}
+
+/**
+ * a general Ruby object with instance variables.
+ *
+ * Note that, inheritance hierarchy in Ruby
+ * is not represented as the one in JavaScript.
+ */
+export class RObject extends WithIvars {
 }
