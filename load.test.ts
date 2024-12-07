@@ -1,5 +1,12 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { RArray, REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
+import {
+  RArray,
+  REncoding,
+  RHash,
+  RObject,
+  RSymbol,
+  type RValue,
+} from "./rom.ts";
 import { load } from "./load.ts";
 import { seq, type SeqElement } from "./testutil.ts";
 
@@ -339,6 +346,23 @@ function setupLink<const T extends unknown[]>(
   callback(...values);
   return values[0];
 }
+
+Deno.test("load loads Hash", () => {
+  assertEquals(l("\x04\x08", "{", 0), new RHash());
+  assertEquals(
+    l("\x04\x08", "{", 2, "i", 42, "0", "i", 100, "F"),
+    new RHash([[42n, null], [100n, false]]),
+  );
+
+  assertEquals(
+    l("\x04\x08", "}", 0, "i", 42),
+    new RHash([], { defaultValue: 42n }),
+  );
+  assertEquals(
+    l("\x04\x08", "}", 2, "i", 42, "0", "i", 100, "F", "i", 42),
+    new RHash([[42n, null], [100n, false]], { defaultValue: 42n }),
+  );
+});
 
 Deno.test("load loads links", () => {
   // Cycle

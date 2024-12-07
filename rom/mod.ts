@@ -2,10 +2,12 @@ import type { REncoding } from "./encoding.ts";
 import type { RSymbol } from "./rsymbol.ts";
 import type { RObject } from "./robject.ts";
 import type { RArray } from "./rarray.ts";
+import type { RHash } from "./rhash.ts";
 export * from "./encoding.ts";
 export * from "./rsymbol.ts";
 export * from "./robject.ts";
 export * from "./rarray.ts";
+export * from "./rhash.ts";
 
 export type RInteger = bigint;
 export type RFloat = number;
@@ -20,4 +22,5 @@ export type RValue =
   | REncoding
   | RSymbol
   | RObject
-  | RArray;
+  | RArray
+  | RHash;

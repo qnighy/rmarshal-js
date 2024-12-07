@@ -12,6 +12,8 @@ export const TYPE_SYMLINK = 0x3B; // ';'
 export const TYPE_IVAR = 0x49; // 'I'
 export const TYPE_OBJECT = 0x6F; // 'o'
 export const TYPE_ARRAY = 0x5B; // '['
+export const TYPE_HASH = 0x7B; // '{'
+export const TYPE_HASH_WITH_DEFAULT = 0x7D; // '}'
 export const TYPE_LINK = 0x40; // '@'
 
 export const SIGN_NEGATIVE = 0x2D; // '-'

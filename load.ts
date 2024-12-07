@@ -8,6 +8,8 @@ import {
   TYPE_FALSE,
   TYPE_FIXNUM,
   TYPE_FLOAT,
+  TYPE_HASH,
+  TYPE_HASH_WITH_DEFAULT,
   TYPE_IVAR,
   TYPE_LINK,
   TYPE_NIL,
@@ -16,7 +18,14 @@ import {
   TYPE_SYMLINK,
   TYPE_TRUE,
 } from "./marshal-common.ts";
-import { RArray, REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
+import {
+  RArray,
+  REncoding,
+  RHash,
+  RObject,
+  RSymbol,
+  type RValue,
+} from "./rom.ts";
 
 export function load(buf: Uint8Array): RValue {
   const loader = new Loader(buf);
@@ -96,6 +105,10 @@ export class Loader {
         return this.#readObjectBody();
       case TYPE_ARRAY:
         return this.#readArrayBody();
+      case TYPE_HASH:
+        return this.#readHashBody(false);
+      case TYPE_HASH_WITH_DEFAULT:
+        return this.#readHashBody(true);
       case TYPE_LINK:
         return this.#readLink();
       default:
@@ -347,6 +360,23 @@ export class Loader {
       arr.elements.push(this.#readValue());
     }
     return arr;
+  }
+
+  #readHashBody(hasDefault: boolean): RHash {
+    const numEntries = this.#readLength();
+    const hash = this.#linkValue(new RHash());
+    for (let i = 0; i < numEntries; i++) {
+      const key = this.#readValue();
+      const value = this.#readValue();
+      hash.entries.push([key, value]);
+    }
+    if (hasDefault) {
+      hash.defaultValue = this.#readValue();
+      if (hash.defaultValue == null) {
+        throw new SyntaxError("Got nil as explicit default value");
+      }
+    }
+    return hash;
   }
 
   #reserveLinkId(): number {

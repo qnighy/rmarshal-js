@@ -8,6 +8,8 @@ import {
   TYPE_FALSE,
   TYPE_FIXNUM,
   TYPE_FLOAT,
+  TYPE_HASH,
+  TYPE_HASH_WITH_DEFAULT,
   TYPE_IVAR,
   TYPE_LINK,
   TYPE_NIL,
@@ -20,6 +22,7 @@ import {
   RArray,
   REncoding,
   RExoticSymbol,
+  RHash,
   RObject,
   RSymbol,
   type RValue,
@@ -93,6 +96,8 @@ class Dumper {
         this.#writeObject(value);
       } else if (value instanceof RArray) {
         this.#writeArray(value);
+      } else if (value instanceof RHash) {
+        this.#writeHash(value);
       } else {
         throw new TypeError(`Unsupported type: ${typeof value}`);
       }
@@ -190,6 +195,32 @@ class Dumper {
     }
     if (length !== 0) {
       throw new Error("Array length mismatch");
+    }
+  }
+
+  #writeHash(value: RHash) {
+    if (value.className !== "Hash") {
+      throw new Error("TODO: subclass of Hash");
+    }
+    if (value.numIvars !== 0) {
+      throw new Error("TODO: ivars in Hash");
+    }
+
+    const defaultValue = value.defaultValue;
+
+    this.#writeByte(defaultValue == null ? TYPE_HASH : TYPE_HASH_WITH_DEFAULT);
+    let length = +value.entries.length;
+    this.#writeFixnum(length);
+    for (const [entryKey, entryValue] of value.entries) {
+      --length;
+      this.#writeValue(entryKey);
+      this.#writeValue(entryValue);
+    }
+    if (length !== 0) {
+      throw new Error("Hash length mismatch");
+    }
+    if (defaultValue != null) {
+      this.#writeValue(defaultValue);
     }
   }
 

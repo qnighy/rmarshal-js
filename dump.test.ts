@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { RArray, REncoding, RObject, RSymbol } from "./rom.ts";
+import { RArray, REncoding, RHash, RObject, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 import { seq } from "./testutil.ts";
 
@@ -218,6 +218,23 @@ Deno.test("dump dumps Array", () => {
   assertEquals(
     dump(new RArray([42n, null])),
     seq("\x04\x08", "[", 2, "i", 42, "0"),
+  );
+});
+
+Deno.test("dump dumps Hash", () => {
+  assertEquals(dump(new RHash()), seq("\x04\x08", "{", 0));
+  assertEquals(
+    dump(new RHash([[42n, null], [100n, false]])),
+    seq("\x04\x08", "{", 2, "i", 42, "0", "i", 100, "F"),
+  );
+
+  assertEquals(
+    dump(new RHash([], { defaultValue: 42n })),
+    seq("\x04\x08", "}", 0, "i", 42),
+  );
+  assertEquals(
+    dump(new RHash([[42n, null], [100n, false]], { defaultValue: 42n })),
+    seq("\x04\x08", "}", 2, "i", 42, "0", "i", 100, "F", "i", 42),
   );
 });
 
