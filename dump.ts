@@ -1,6 +1,7 @@
 import {
   MARSHAL_MAJOR,
   MARSHAL_MINOR,
+  RObjectLike,
   SIGN_NEGATIVE,
   SIGN_POSITIVE,
   TYPE_ARRAY,
@@ -14,6 +15,7 @@ import {
   TYPE_LINK,
   TYPE_NIL,
   TYPE_OBJECT,
+  TYPE_STRING,
   TYPE_SYMBOL,
   TYPE_SYMLINK,
   TYPE_TRUE,
@@ -24,6 +26,7 @@ import {
   RExoticSymbol,
   RHash,
   RObject,
+  RString,
   RSymbol,
   type RValue,
 } from "./rom.ts";
@@ -92,12 +95,13 @@ class Dumper {
         return;
       }
       this.#links.set(value, this.#nextLinkId++);
-      if (value instanceof RObject) {
-        this.#writeObject(value);
-      } else if (value instanceof RArray) {
-        this.#writeArray(value);
-      } else if (value instanceof RHash) {
-        this.#writeHash(value);
+      if (
+        value instanceof RObject ||
+        value instanceof RArray ||
+        value instanceof RHash ||
+        value instanceof RString
+      ) {
+        this.#writeObjectLike(value);
       } else {
         throw new TypeError(`Unsupported type: ${typeof value}`);
       }
@@ -163,27 +167,34 @@ class Dumper {
     }
   }
 
+  #writeObjectLike(value: RObjectLike) {
+    const numIvars = this.#numIvars(value);
+    if (numIvars > 0 && !(value instanceof RObject)) {
+      this.#writeByte(TYPE_IVAR);
+    }
+    if (value instanceof RArray) {
+      this.#writeArray(value);
+    } else if (value instanceof RHash) {
+      this.#writeHash(value);
+    } else if (value instanceof RString) {
+      this.#writeString(value);
+    } else {
+      this.#writeObject(value);
+    }
+    if (numIvars > 0 || value instanceof RObject) {
+      this.#writeIvars(value, numIvars);
+    }
+  }
+
   #writeObject(value: RObject) {
     this.#writeByte(TYPE_OBJECT);
     this.#writeSymbolObject(value.className);
-    let numIvars = value.numIvars;
-    this.#writeFixnum(numIvars);
-    for (const [key, val] of value.ivars()) {
-      --numIvars;
-      this.#writeSymbolObject(key);
-      this.#writeValue(val);
-    }
-    if (numIvars !== 0) {
-      throw new Error("Ivar count mismatch");
-    }
+    // ivars are handled in #writeObjectLike
   }
 
   #writeArray(value: RArray) {
     if (value.className !== "Array") {
       throw new Error("TODO: subclass of Array");
-    }
-    if (value.numIvars !== 0) {
-      throw new Error("TODO: ivars in Array");
     }
 
     this.#writeByte(TYPE_ARRAY);
@@ -202,9 +213,6 @@ class Dumper {
     if (value.className !== "Hash") {
       throw new Error("TODO: subclass of Hash");
     }
-    if (value.numIvars !== 0) {
-      throw new Error("TODO: ivars in Hash");
-    }
 
     const defaultValue = value.defaultValue;
 
@@ -221,6 +229,55 @@ class Dumper {
     }
     if (defaultValue != null) {
       this.#writeValue(defaultValue);
+    }
+  }
+
+  #writeString(value: RString) {
+    if (value.className !== "String") {
+      throw new Error("TODO: subclass of String");
+    }
+
+    const bytes = value.bytes;
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error("Not a byte array");
+    }
+
+    this.#writeByte(TYPE_STRING);
+    this.#writeBytes(bytes);
+  }
+
+  #numIvars(value: RObjectLike): number {
+    let numIvars = value.numIvars;
+    if (value instanceof RString && value.encoding !== REncoding.ASCII_8BIT) {
+      numIvars++;
+    }
+    return numIvars;
+  }
+
+  #writeIvars(value: RObjectLike, numIvars: number) {
+    this.#writeFixnum(numIvars);
+    if (value instanceof RString && value.encoding !== REncoding.ASCII_8BIT) {
+      --numIvars;
+      if (
+        value.encoding === REncoding.UTF_8 ||
+        value.encoding === REncoding.US_ASCII
+      ) {
+        this.#writeSymbolObject("E");
+        this.#writeByte(
+          value.encoding === REncoding.UTF_8 ? TYPE_TRUE : TYPE_FALSE,
+        );
+      } else {
+        this.#writeSymbolObject("encoding");
+        throw new Error("TODO: exotic enodings");
+      }
+    }
+    for (const [key, val] of value.ivars()) {
+      --numIvars;
+      this.#writeSymbolObject(key);
+      this.#writeValue(val);
+    }
+    if (numIvars !== 0) {
+      throw new Error("Ivar count mismatch");
     }
   }
 

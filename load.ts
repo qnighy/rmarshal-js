@@ -14,6 +14,7 @@ import {
   TYPE_LINK,
   TYPE_NIL,
   TYPE_OBJECT,
+  TYPE_STRING,
   TYPE_SYMBOL,
   TYPE_SYMLINK,
   TYPE_TRUE,
@@ -23,6 +24,7 @@ import {
   REncoding,
   RHash,
   RObject,
+  RString,
   RSymbol,
   type RValue,
 } from "./rom.ts";
@@ -109,6 +111,8 @@ export class Loader {
         return this.#readHashBody(false);
       case TYPE_HASH_WITH_DEFAULT:
         return this.#readHashBody(true);
+      case TYPE_STRING:
+        return this.#readStringBody();
       case TYPE_LINK:
         return this.#readLink();
       default:
@@ -123,6 +127,14 @@ export class Loader {
     switch (type) {
       case TYPE_SYMBOL:
         return this.#readSymbolBody(true);
+      case TYPE_ARRAY:
+        return this.#readIvars(this.#readArrayBody());
+      case TYPE_HASH:
+        return this.#readIvars(this.#readHashBody(false));
+      case TYPE_HASH_WITH_DEFAULT:
+        return this.#readIvars(this.#readHashBody(true));
+      case TYPE_STRING:
+        return this.#readIvars(this.#readStringBody());
       case TYPE_IVAR:
         throw new SyntaxError("Nested instance variable container");
       default:
@@ -377,6 +389,53 @@ export class Loader {
       }
     }
     return hash;
+  }
+
+  #readStringBody(): RString {
+    const bytes = this.#readByteSlice();
+    return this.#linkValue(
+      new RString(bytes, { encoding: REncoding.ASCII_8BIT }),
+    );
+  }
+
+  #readIvars<T extends RObject | RArray | RHash | RString>(obj: T): T {
+    const numIvars = this.#readLength();
+    for (let i = 0; i < numIvars; i++) {
+      const key = this.#readSymbol();
+      const value = this.#readValue();
+      if (obj instanceof RString && key === "E") {
+        if (obj.encoding !== REncoding.ASCII_8BIT) {
+          throw new SyntaxError("Redundant encoding specifier in String");
+        }
+        if (value === true) {
+          obj.encoding = REncoding.UTF_8;
+        } else if (value === false) {
+          obj.encoding = REncoding.US_ASCII;
+        } else {
+          throw new SyntaxError("Invalid short encoding specifier in String");
+        }
+        continue;
+      } else if (obj instanceof RString && key === "encoding") {
+        if (obj.encoding !== REncoding.ASCII_8BIT) {
+          throw new SyntaxError("Redundant encoding specifier in String");
+        }
+        throw Error("TODO: String with exotic encoding");
+      }
+
+      const ivarName = RSymbol.asIvarName(key);
+      if (ivarName == null) {
+        throw new SyntaxError(
+          `Not allowed as an instance variable name: ${key}`,
+        );
+      }
+      if (ivarName in obj) {
+        throw new SyntaxError(
+          `Duplicate instance variable name: ${key}`,
+        );
+      }
+      obj[ivarName] = value;
+    }
+    return obj;
   }
 
   #reserveLinkId(): number {

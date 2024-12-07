@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { RArray, REncoding, RHash, RObject, RSymbol } from "./rom.ts";
+import { RArray, REncoding, RHash, RObject, RString, RSymbol } from "./rom.ts";
 import { dump } from "./dump.ts";
 import { seq } from "./testutil.ts";
 
@@ -219,6 +219,14 @@ Deno.test("dump dumps Array", () => {
     dump(new RArray([42n, null])),
     seq("\x04\x08", "[", 2, "i", 42, "0"),
   );
+  assertEquals(
+    dump(
+      new RArray([null], {
+        ivars: { "@foo": 42n },
+      }),
+    ),
+    seq("\x04\x08", "I[", 1, "0", 1, ":", 4, "@foo", "i", 42),
+  );
 });
 
 Deno.test("dump dumps Hash", () => {
@@ -226,6 +234,14 @@ Deno.test("dump dumps Hash", () => {
   assertEquals(
     dump(new RHash([[42n, null], [100n, false]])),
     seq("\x04\x08", "{", 2, "i", 42, "0", "i", 100, "F"),
+  );
+  assertEquals(
+    dump(
+      new RHash([[null, null]], {
+        ivars: { "@foo": 42n },
+      }),
+    ),
+    seq("\x04\x08", "I{", 1, "0", "0", 1, ":", 4, "@foo", "i", 42),
   );
 
   assertEquals(
@@ -235,6 +251,73 @@ Deno.test("dump dumps Hash", () => {
   assertEquals(
     dump(new RHash([[42n, null], [100n, false]], { defaultValue: 42n })),
     seq("\x04\x08", "}", 2, "i", 42, "0", "i", 100, "F", "i", 42),
+  );
+  assertEquals(
+    dump(
+      new RHash([[null, null]], {
+        ivars: { "@foo": 42n },
+        defaultValue: 42n,
+      }),
+    ),
+    seq("\x04\x08", "I}", 1, "0", "0", "i", 42, 1, ":", 4, "@foo", "i", 42),
+  );
+});
+
+Deno.test("dump dumps String", () => {
+  assertEquals(
+    dump(new RString("foo", { encoding: REncoding.ASCII_8BIT })),
+    seq("\x04\x08", '"', 3, "foo"),
+  );
+  assertEquals(
+    dump(
+      new RString(Uint8Array.from([0xE3, 0x81, 0x82]), {
+        encoding: REncoding.ASCII_8BIT,
+      }),
+    ),
+    seq("\x04\x08", '"', 3, "\xE3\x81\x82"),
+  );
+  assertEquals(
+    dump(new RString("あ")),
+    seq("\x04\x08", 'I"', 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
+  );
+  // // TODO
+  // assertEquals(
+  //   dump(new RString(Uint8Array.from([0x82, 0xA0]), {
+  //     encoding: REncoding.Windows_31J,
+  //   })),
+  //   seq(
+  //     "\x04\x08",
+  //     '":',
+  //     2,
+  //     "\x82\xA0",
+  //     1,
+  //     ":",
+  //     8,
+  //     "encoding",
+  //     '"',
+  //     11,
+  //     "Windows-31J",
+  //   ),
+  // );
+  assertEquals(
+    dump(
+      new RString("foo", {
+        encoding: REncoding.ASCII_8BIT,
+        ivars: { "@foo": 42n },
+      }),
+    ),
+    seq("\x04\x08", 'I"', 3, "foo", 1, ":", 4, "@foo", "i", 42),
+  );
+  assertEquals(
+    dump(new RString("あ", { ivars: { "@foo": 42n } })),
+    seq(
+      "\x04\x08",
+      "I",
+      ...['"', 3, "\xE3\x81\x82"],
+      2,
+      ...[":", 1, "E", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
   );
 });
 

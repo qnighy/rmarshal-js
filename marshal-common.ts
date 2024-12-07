@@ -1,3 +1,5 @@
+import type { RArray, RHash, RObject, RString } from "./rom.ts";
+
 export const MARSHAL_MAJOR = 4;
 export const MARSHAL_MINOR = 8;
 
@@ -14,7 +16,14 @@ export const TYPE_OBJECT = 0x6F; // 'o'
 export const TYPE_ARRAY = 0x5B; // '['
 export const TYPE_HASH = 0x7B; // '{'
 export const TYPE_HASH_WITH_DEFAULT = 0x7D; // '}'
+export const TYPE_STRING = 0x22; // '"'
 export const TYPE_LINK = 0x40; // '@'
 
 export const SIGN_NEGATIVE = 0x2D; // '-'
 export const SIGN_POSITIVE = 0x2B; // '+'
+
+export type RObjectLike =
+  | RObject
+  | RArray
+  | RHash
+  | RString;
