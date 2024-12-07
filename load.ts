@@ -28,6 +28,7 @@ export class Loader {
   #pos = 0;
   #symbols!: (RSymbol | undefined)[];
   #visitedSymbols!: Set<RSymbol>;
+  #links!: (RValue | undefined)[];
 
   constructor(buf: Uint8Array) {
     this.#buf = buf;
@@ -44,6 +45,7 @@ export class Loader {
   readTopLevel(): RValue {
     this.#symbols = [];
     this.#visitedSymbols = new Set();
+    this.#links = [];
     const major = this.#readByte();
     const minor = this.#readByte();
     if (major !== MARSHAL_MAJOR || minor > MARSHAL_MINOR) {
@@ -66,9 +68,9 @@ export class Loader {
       case 0x69: // 'i'
         return BigInt(this.#readFixnumBody());
       case 0x6C: // 'l'
-        return this.#readBignumBody();
+        return this.#linkValue(this.#readBignumBody());
       case 0x66: // 'f'
-        return this.#readFloatBody();
+        return this.#linkValue(this.#readFloatBody());
       case 0x3A: // ':'
         return this.#readSymbolBody(false);
       case 0x3B: // ';'
@@ -79,6 +81,8 @@ export class Loader {
         return this.#readObjectBody();
       case 0x5B: // '['
         return this.#readArrayBody();
+      case 0x40: // '@'
+        return this.#readLink();
       default:
         throw new SyntaxError(
           `Unknown type: ${type.toString(16).padStart(2, "0").toUpperCase()}`,
@@ -294,9 +298,12 @@ export class Loader {
   }
 
   #readObjectBody(): RObject {
+    // Need to reserve one before className is read
+    // because className may contain String as part of encoding.
+    const linkId = this.#reserveLinkId();
     const className = this.#readSymbol();
     const numIvars = this.#readLength();
-    const obj = new RObject(className);
+    const obj = this.#linkValueAt(linkId, new RObject(className));
     for (let i = 0; i < numIvars; i++) {
       const key = this.#readSymbol();
       const value = this.#readValue();
@@ -318,11 +325,39 @@ export class Loader {
 
   #readArrayBody(): RArray {
     const numElems = this.#readLength();
-    const arr = new RArray();
+    const arr = this.#linkValue(new RArray());
     for (let i = 0; i < numElems; i++) {
       arr.elements.push(this.#readValue());
     }
     return arr;
+  }
+
+  #reserveLinkId(): number {
+    const linkId = this.#links.length;
+    this.#links.push(undefined);
+    return linkId;
+  }
+
+  #linkValueAt<T extends RValue>(linkId: number, value: T): T {
+    this.#links[linkId] = value;
+    return value;
+  }
+
+  #linkValue<T extends RValue>(value: T): T {
+    this.#links.push(value);
+    return value;
+  }
+
+  #readLink(): RValue {
+    const linkId = this.#readLength();
+    if (linkId >= this.#links.length) {
+      throw new SyntaxError("Invalid link");
+    }
+    const value = this.#links[linkId];
+    if (value == null) {
+      throw new SyntaxError("Invalid circular link");
+    }
+    return value;
   }
 
   #readByteSlice(): Uint8Array {

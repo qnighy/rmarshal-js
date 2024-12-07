@@ -331,3 +331,138 @@ Deno.test("load loads Array", () => {
   assertEquals(l("\x04\x08", "[", 0), new RArray([]));
   assertEquals(l("\x04\x08", "[", 2, "i", 42, "0"), new RArray([42n, null]));
 });
+
+function setupLink<const T extends unknown[]>(
+  values: T,
+  callback: (...values: T) => void,
+): T[0] {
+  callback(...values);
+  return values[0];
+}
+
+Deno.test("load loads links", () => {
+  // Cycle
+  assertEquals(
+    l("\x04\x08", "[", 1, "@", 0),
+    setupLink([new RArray()], (a) => a.elements.push(a)),
+  );
+  // Shared reference
+  assertEquals(
+    l("\x04\x08", "[", 2, "[", 0, "@", 1),
+    setupLink([new RArray(), new RArray()], (a, b) => a.elements.push(b, b)),
+  );
+  // Skips nil
+  assertEquals(
+    l("\x04\x08", "[", 3, "0", "[", 0, "@", 1),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(null, b, b),
+    ),
+  );
+  // Skips false
+  assertEquals(
+    l("\x04\x08", "[", 3, "F", "[", 0, "@", 1),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(false, b, b),
+    ),
+  );
+  // Skips true
+  assertEquals(
+    l("\x04\x08", "[", 3, "T", "[", 0, "@", 1),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(true, b, b),
+    ),
+  );
+  // Skips Fixnum
+  assertEquals(
+    l("\x04\x08", "[", 3, "i", 42, "[", 0, "@", 1),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(42n, b, b),
+    ),
+  );
+  // Skips Symbol
+  assertEquals(
+    l("\x04\x08", "[", 3, ":", 3, "foo", "[", 0, "@", 1),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push("foo", b, b),
+    ),
+  );
+  // Counts Bignum
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      3,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["[", 0],
+      ...["@", 2],
+    ),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(0x100000000n, b, b),
+    ),
+  );
+  // Allows unlinked Bignums
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      2,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+    ),
+    new RArray([0x100000000n, 0x100000000n]),
+  );
+  // Allows linked Bignums
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      2,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["@", 1],
+    ),
+    new RArray([0x100000000n, 0x100000000n]),
+  );
+  // Counts Float
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      3,
+      ...["f", 1, "1"],
+      ...["[", 0],
+      ...["@", 2],
+    ),
+    setupLink(
+      [new RArray(), new RArray()],
+      (a, b) => a.elements.push(1, b, b),
+    ),
+  );
+  // Allows linked Floats
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      2,
+      ...["f", 1, "1"],
+      ...["f", 1, "1"],
+    ),
+    new RArray([1, 1]),
+  );
+  // Allows unlinked Floats
+  assertEquals(
+    l(
+      "\x04\x08",
+      "[",
+      2,
+      ...["f", 1, "1"],
+      ...["@", 1],
+    ),
+    new RArray([1, 1]),
+  );
+});

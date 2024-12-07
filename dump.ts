@@ -28,6 +28,8 @@ class Dumper {
   #buf = new Uint8Array(8);
   #pos = 0;
   #symbols!: Map<RSymbol, number>;
+  #links!: Map<RValue, number>;
+  #nextLinkId!: number;
 
   result(): Uint8Array {
     return this.#buf.subarray(0, this.#pos);
@@ -35,6 +37,8 @@ class Dumper {
 
   writeTopLevel(value: RValue) {
     this.#symbols = new Map<RSymbol, number>();
+    this.#links = new Map<RValue, number>();
+    this.#nextLinkId = 0;
     this.#writeByte(MARSHAL_MAJOR);
     this.#writeByte(MARSHAL_MINOR);
     this.#writeValue(value);
@@ -50,22 +54,33 @@ class Dumper {
         this.#writeByte(0x69); // 'i'
         this.#writeFixnum(Number(value));
       } else {
+        this.#nextLinkId++;
         this.#writeByte(0x6C); // 'l'
         this.#writeBignum(value);
       }
     } else if (typeof value === "number") {
+      this.#nextLinkId++;
       this.#writeByte(0x66); // 'f'
       this.#writeFloat(value);
     } else if (typeof value === "string") {
       this.#writeSymbolObject(value);
     } else if (value instanceof RExoticSymbol) {
       this.#writeSymbolObject(value);
-    } else if (value instanceof RObject) {
-      this.#writeObject(value);
-    } else if (value instanceof RArray) {
-      this.#writeArray(value);
     } else {
-      throw new TypeError(`Unsupported type: ${typeof value}`);
+      const linkId = this.#links.get(value);
+      if (linkId != null) {
+        this.#writeByte(0x40); // '@'
+        this.#writeFixnum(linkId);
+        return;
+      }
+      this.#links.set(value, this.#nextLinkId++);
+      if (value instanceof RObject) {
+        this.#writeObject(value);
+      } else if (value instanceof RArray) {
+        this.#writeArray(value);
+      } else {
+        throw new TypeError(`Unsupported type: ${typeof value}`);
+      }
     }
   }
 

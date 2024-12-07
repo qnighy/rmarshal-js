@@ -220,3 +220,132 @@ Deno.test("dump dumps Array", () => {
     seq("\x04\x08", "[", 2, "i", 42, "0"),
   );
 });
+
+function setupLink<const T extends unknown[]>(
+  values: T,
+  callback: (...values: T) => void,
+): T[0] {
+  callback(...values);
+  return values[0];
+}
+
+Deno.test("dump dumps links", () => {
+  // Cycle
+  assertEquals(
+    dump(setupLink([new RArray()], (a) => a.elements.push(a))),
+    seq("\x04\x08", "[", 1, "@", 0),
+  );
+  // Shared reference
+  assertEquals(
+    dump(
+      setupLink([new RArray(), new RArray()], (a, b) => a.elements.push(b, b)),
+    ),
+    seq("\x04\x08", "[", 2, "[", 0, "@", 1),
+  );
+  // Skips nil
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(null, b, b),
+      ),
+    ),
+    seq("\x04\x08", "[", 3, "0", "[", 0, "@", 1),
+  );
+  // Skips false
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(false, b, b),
+      ),
+    ),
+    seq("\x04\x08", "[", 3, "F", "[", 0, "@", 1),
+  );
+  // Skips true
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(true, b, b),
+      ),
+    ),
+    seq("\x04\x08", "[", 3, "T", "[", 0, "@", 1),
+  );
+  // Skips Fixnum
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(42n, b, b),
+      ),
+    ),
+    seq("\x04\x08", "[", 3, "i", 42, "[", 0, "@", 1),
+  );
+  // Skips Symbol
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push("foo", b, b),
+      ),
+    ),
+    seq("\x04\x08", "[", 3, ":", 3, "foo", "[", 0, "@", 1),
+  );
+  // Counts Bignum
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(0x100000000n, b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      3,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["[", 0],
+      ...["@", 2],
+    ),
+  );
+  // Treats Bignums as all distinct
+  assertEquals(
+    dump(new RArray([0x100000000n, 0x100000000n])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+    ),
+  );
+  // Counts Float
+  assertEquals(
+    dump(
+      setupLink(
+        [new RArray(), new RArray()],
+        (a, b) => a.elements.push(1, b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      3,
+      ...["f", 1, "1"],
+      ...["[", 0],
+      ...["@", 2],
+    ),
+  );
+  // Treats Floats as all distinct
+  assertEquals(
+    dump(new RArray([1, 1])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["f", 1, "1"],
+      ...["f", 1, "1"],
+    ),
+  );
+});
