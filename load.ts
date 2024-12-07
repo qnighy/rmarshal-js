@@ -1,7 +1,22 @@
+import {
+  MARSHAL_MAJOR,
+  MARSHAL_MINOR,
+  SIGN_NEGATIVE,
+  SIGN_POSITIVE,
+  TYPE_ARRAY,
+  TYPE_BIGNUM,
+  TYPE_FALSE,
+  TYPE_FIXNUM,
+  TYPE_FLOAT,
+  TYPE_IVAR,
+  TYPE_LINK,
+  TYPE_NIL,
+  TYPE_OBJECT,
+  TYPE_SYMBOL,
+  TYPE_SYMLINK,
+  TYPE_TRUE,
+} from "./marshal-common.ts";
 import { RArray, REncoding, RObject, RSymbol, type RValue } from "./rom.ts";
-
-const MARSHAL_MAJOR = 4;
-const MARSHAL_MINOR = 8;
 
 export function load(buf: Uint8Array): RValue {
   const loader = new Loader(buf);
@@ -59,29 +74,29 @@ export class Loader {
   #readValue(): RValue {
     const type = this.#readByte();
     switch (type) {
-      case 0x30: // '0'
+      case TYPE_NIL:
         return null;
-      case 0x46: // 'F'
+      case TYPE_FALSE:
         return false;
-      case 0x54: // 'T'
+      case TYPE_TRUE:
         return true;
-      case 0x69: // 'i'
+      case TYPE_FIXNUM:
         return BigInt(this.#readFixnumBody());
-      case 0x6C: // 'l'
+      case TYPE_BIGNUM:
         return this.#linkValue(this.#readBignumBody());
-      case 0x66: // 'f'
+      case TYPE_FLOAT:
         return this.#linkValue(this.#readFloatBody());
-      case 0x3A: // ':'
+      case TYPE_SYMBOL:
         return this.#readSymbolBody(false);
-      case 0x3B: // ';'
+      case TYPE_SYMLINK:
         return this.#readSymlinkBody();
-      case 0x49: // 'I'
+      case TYPE_IVAR:
         return this.#readInIvarContainer();
-      case 0x6F: // 'o'
+      case TYPE_OBJECT:
         return this.#readObjectBody();
-      case 0x5B: // '['
+      case TYPE_ARRAY:
         return this.#readArrayBody();
-      case 0x40: // '@'
+      case TYPE_LINK:
         return this.#readLink();
       default:
         throw new SyntaxError(
@@ -93,9 +108,9 @@ export class Loader {
   #readInIvarContainer(): RValue {
     const type = this.#readByte();
     switch (type) {
-      case 0x3A: // ':'
+      case TYPE_SYMBOL:
         return this.#readSymbolBody(true);
-      case 0x49: // 'I'
+      case TYPE_IVAR:
         throw new SyntaxError("Nested instance variable container");
       default:
         return Loader.#rejectUnsupportedType(
@@ -108,16 +123,16 @@ export class Loader {
   #readSymbol(): RSymbol {
     const type = this.#readByte();
     switch (type) {
-      case 0x3A: // ':'
+      case TYPE_SYMBOL:
         return this.#readSymbolBody(false);
-      case 0x3B: // ';'
+      case TYPE_SYMLINK:
         return this.#readSymlinkBody();
-      case 0x49: { // 'I'
+      case TYPE_IVAR: {
         const subtype = this.#readByte();
         switch (subtype) {
-          case 0x3A: // ':'
+          case TYPE_SYMBOL:
             return this.#readSymbolBody(true);
-          case 0x49: // 'I'
+          case TYPE_IVAR:
             throw new SyntaxError("Nested instance variable container");
           default:
             return Loader.#rejectUnsupportedType(
@@ -148,34 +163,36 @@ export class Loader {
 
   static #typeDescription(type: number): string | undefined {
     switch (type) {
-      case 0x30: // '0'
+      case TYPE_NIL:
         return "nil";
-      case 0x46: // 'F'
+      case TYPE_FALSE:
         return "false";
-      case 0x54: // 'T'
+      case TYPE_TRUE:
         return "true";
-      case 0x69: // 'i'
+      case TYPE_FIXNUM:
         return "Integer (Fixnum)";
-      case 0x6C: // 'l'
+      case TYPE_BIGNUM:
         return "Integer (Bignum)";
-      case 0x66: // 'f'
+      case TYPE_FLOAT:
         return "Float";
-      case 0x3A: // ':'
+      case TYPE_SYMBOL:
         return "Symbol";
-      case 0x3B: // ';'
+      case TYPE_SYMLINK:
         return "Symbol link";
-      case 0x49: // 'I'
+      case TYPE_IVAR:
         return "Instance variable container";
-      case 0x6F: // 'o'
+      case TYPE_OBJECT:
         return "Object";
-      case 0x5B: // '['
+      case TYPE_ARRAY:
         return "Array";
+      case TYPE_LINK:
+        return "Object link";
     }
   }
 
   #readBignumBody(): bigint {
     const signByte = this.#readByte();
-    if (signByte !== 0x2B && signByte !== 0x2D) {
+    if (signByte !== SIGN_POSITIVE && signByte !== SIGN_NEGATIVE) {
       throw new SyntaxError("Invalid Bignum sign byte");
     }
     const numWords = this.#readLength();
@@ -183,7 +200,7 @@ export class Loader {
     for (let i = 0; i < numWords * 2; i++) {
       value |= BigInt(this.#readByte()) << (BigInt(i) * 8n);
     }
-    if (signByte !== 0x2D) {
+    if (signByte !== SIGN_NEGATIVE) {
       if (value < 0x40000000n) {
         throw new SyntaxError("Incorrect Fixnum representation as Bignum");
       } else if (value < (1n << (BigInt(numWords - 1) * 16n))) {

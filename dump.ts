@@ -1,4 +1,22 @@
 import {
+  MARSHAL_MAJOR,
+  MARSHAL_MINOR,
+  SIGN_NEGATIVE,
+  SIGN_POSITIVE,
+  TYPE_ARRAY,
+  TYPE_BIGNUM,
+  TYPE_FALSE,
+  TYPE_FIXNUM,
+  TYPE_FLOAT,
+  TYPE_IVAR,
+  TYPE_LINK,
+  TYPE_NIL,
+  TYPE_OBJECT,
+  TYPE_SYMBOL,
+  TYPE_SYMLINK,
+  TYPE_TRUE,
+} from "./marshal-common.ts";
+import {
   RArray,
   REncoding,
   RExoticSymbol,
@@ -6,9 +24,6 @@ import {
   RSymbol,
   type RValue,
 } from "./rom.ts";
-
-const MARSHAL_MAJOR = 4;
-const MARSHAL_MINOR = 8;
 
 export function dump(value: RValue): Uint8Array {
   const dumper = new Dumper();
@@ -46,21 +61,21 @@ class Dumper {
 
   #writeValue(value: RValue) {
     if (value === null) {
-      this.#writeByte(0x30); // '0'
+      this.#writeByte(TYPE_NIL);
     } else if (typeof value === "boolean") {
-      this.#writeByte(value ? 0x54 : 0x46); // 'T' or 'F'
+      this.#writeByte(value ? TYPE_TRUE : TYPE_FALSE);
     } else if (typeof value === "bigint") {
       if (-0x40000000n <= value && value < 0x40000000n) {
-        this.#writeByte(0x69); // 'i'
+        this.#writeByte(TYPE_FIXNUM);
         this.#writeFixnum(Number(value));
       } else {
         this.#nextLinkId++;
-        this.#writeByte(0x6C); // 'l'
+        this.#writeByte(TYPE_BIGNUM);
         this.#writeBignum(value);
       }
     } else if (typeof value === "number") {
       this.#nextLinkId++;
-      this.#writeByte(0x66); // 'f'
+      this.#writeByte(TYPE_FLOAT);
       this.#writeFloat(value);
     } else if (typeof value === "string") {
       this.#writeSymbolObject(value);
@@ -69,7 +84,7 @@ class Dumper {
     } else {
       const linkId = this.#links.get(value);
       if (linkId != null) {
-        this.#writeByte(0x40); // '@'
+        this.#writeByte(TYPE_LINK);
         this.#writeFixnum(linkId);
         return;
       }
@@ -86,9 +101,9 @@ class Dumper {
 
   #writeBignum(value: bigint) {
     if (value >= 0n) {
-      this.#writeByte(0x2B); // '+'
+      this.#writeByte(SIGN_POSITIVE);
     } else {
-      this.#writeByte(0x2D); // '-'
+      this.#writeByte(SIGN_NEGATIVE);
       value = -value;
     }
     let numWords = 0;
@@ -115,7 +130,7 @@ class Dumper {
   #writeSymbolObject(value: RSymbol) {
     const symlinkId = this.#symbols.get(value);
     if (symlinkId != null) {
-      this.#writeByte(0x3B); // ';'
+      this.#writeByte(TYPE_SYMLINK);
       this.#writeFixnum(symlinkId);
       return;
     }
@@ -126,16 +141,16 @@ class Dumper {
       ? new TextEncoder().encode(value)
       : Uint8Array.from(value.bytes);
     if (encoding === REncoding.US_ASCII || encoding === REncoding.ASCII_8BIT) {
-      this.#writeByte(0x3A); // ':'
+      this.#writeByte(TYPE_SYMBOL);
       this.#writeBytes(bytes);
     } else {
-      this.#writeByte(0x49); // 'I'
-      this.#writeByte(0x3A); // ':'
+      this.#writeByte(TYPE_IVAR);
+      this.#writeByte(TYPE_SYMBOL);
       this.#writeBytes(bytes);
       this.#writeFixnum(1);
       if (encoding === REncoding.UTF_8) {
         this.#writeSymbolObject("E");
-        this.#writeByte(0x54); // 'T'
+        this.#writeByte(TYPE_TRUE);
       } else {
         this.#writeSymbolObject("encoding");
         throw new Error("TODO: exotic enodings");
@@ -144,7 +159,7 @@ class Dumper {
   }
 
   #writeObject(value: RObject) {
-    this.#writeByte(0x6F); // 'o'
+    this.#writeByte(TYPE_OBJECT);
     this.#writeSymbolObject(value.className);
     let numIvars = value.numIvars;
     this.#writeFixnum(numIvars);
@@ -166,7 +181,7 @@ class Dumper {
       throw new Error("TODO: ivars in Array");
     }
 
-    this.#writeByte(0x5B); // '['
+    this.#writeByte(TYPE_ARRAY);
     let length = +value.elements.length;
     this.#writeFixnum(length);
     for (const elem of value.elements) {
