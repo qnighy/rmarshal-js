@@ -90,17 +90,20 @@ export type MarshalObject = {
   className: RSymbol;
   ivars: Map<RSymbol, MarshalValue>;
   extenders: RSymbol[];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
 };
 export type MarshalObjectOptions = {
   extenders?: RSymbol[] | undefined;
+  cycle?: boolean | undefined;
 };
 export function MarshalObject(
   className: RSymbol,
   ivars: Map<RSymbol, MarshalValue>,
   options: MarshalObjectOptions = {},
 ): MarshalObject {
-  const { extenders = [] } = options;
-  return { type: "Object", className, ivars, extenders };
+  const { extenders = [], cycle } = options;
+  return { type: "Object", className, ivars, extenders, cycle };
 }
 
 /**
@@ -117,18 +120,21 @@ export type MarshalArray = {
   className: RSymbol | undefined;
   ivars: Map<RSymbol, MarshalValue>;
   extenders: RSymbol[];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
 };
 export type MarshalArrayOptions = {
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
+  cycle?: boolean | undefined;
 };
 export function MarshalArray(
   elements: MarshalValue[],
   options: MarshalArrayOptions = {},
 ): MarshalArray {
-  const { className, ivars = new Map(), extenders = [] } = options;
-  return { type: "Array", elements, className, ivars, extenders };
+  const { className, ivars = new Map(), extenders = [], cycle } = options;
+  return { type: "Array", elements, className, ivars, extenders, cycle };
 }
 
 /**
@@ -146,20 +152,31 @@ export type MarshalHash = {
   className: RSymbol | undefined;
   ivars: Map<RSymbol, MarshalValue>;
   extenders: RSymbol[];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
 };
 export type MarshalHashOptions = {
   defaultValue?: MarshalValue | undefined;
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
+  cycle?: boolean | undefined;
 };
 export function MarshalHash(
   entries: [MarshalValue, MarshalValue][],
   options: MarshalHashOptions = {},
 ): MarshalHash {
-  const { defaultValue, className, ivars = new Map(), extenders = [] } =
+  const { defaultValue, className, ivars = new Map(), extenders = [], cycle } =
     options;
-  return { type: "Hash", entries, defaultValue, className, ivars, extenders };
+  return {
+    type: "Hash",
+    entries,
+    defaultValue,
+    className,
+    ivars,
+    extenders,
+    cycle,
+  };
 }
 
 /**
@@ -177,19 +194,30 @@ export type MarshalString = {
   className: RSymbol | undefined;
   ivars: Map<RSymbol, MarshalValue>;
   extenders: RSymbol[];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
 };
 export type MarshalStringOptions = {
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
+  cycle?: boolean | undefined;
 };
 export function MarshalString(
   bytes: Uint8Array,
   encoding: string,
   options: MarshalStringOptions = {},
 ): MarshalString {
-  const { className, ivars = new Map(), extenders = [] } = options;
-  return { type: "String", bytes, encoding, className, ivars, extenders };
+  const { className, ivars = new Map(), extenders = [], cycle } = options;
+  return {
+    type: "String",
+    bytes,
+    encoding,
+    className,
+    ivars,
+    extenders,
+    cycle,
+  };
 }
 
 /**
@@ -209,12 +237,15 @@ export type MarshalRegexp = {
   className: RSymbol | undefined;
   ivars: Map<RSymbol, MarshalValue>;
   extenders: RSymbol[];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
 };
 export type MarshalRegexpOptions = {
   ruby18compat?: boolean | undefined;
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
+  cycle?: boolean | undefined;
 };
 export function MarshalRegexp(
   sourceBytes: Uint8Array,
@@ -222,8 +253,13 @@ export function MarshalRegexp(
   options: number,
   options_: MarshalRegexpOptions = {},
 ): MarshalRegexp {
-  const { ruby18compat = false, className, ivars = new Map(), extenders = [] } =
-    options_;
+  const {
+    ruby18compat = false,
+    className,
+    ivars = new Map(),
+    extenders = [],
+    cycle,
+  } = options_;
   return {
     type: "Regexp",
     sourceBytes,
@@ -233,6 +269,7 @@ export function MarshalRegexp(
     className,
     ivars,
     extenders,
+    cycle,
   };
 }
 
@@ -308,12 +345,19 @@ export type MarshalStruct = {
   type: "Struct";
   className: RSymbol;
   entries: [RSymbol, MarshalValue][];
+  /** true if it is self-referential. */
+  cycle: boolean | undefined;
+};
+export type MarshalStructOptions = {
+  cycle?: boolean | undefined;
 };
 export function MarshalStruct(
   className: RSymbol,
   entries: [RSymbol, MarshalValue][],
+  options: MarshalStructOptions = {},
 ): MarshalStruct {
-  return { type: "Struct", className, entries };
+  const { cycle } = options;
+  return { type: "Struct", className, entries, cycle };
 }
 
 /**
