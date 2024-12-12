@@ -9,7 +9,7 @@ import {
   TYPE_FIXNUM,
   TYPE_FLOAT,
   TYPE_HASH,
-  TYPE_HASH_WITH_DEFAULT,
+  TYPE_HASH_DEF,
   TYPE_IVAR,
   TYPE_LINK,
   TYPE_NIL,
@@ -109,7 +109,7 @@ export class Loader {
         return this.#readArrayBody();
       case TYPE_HASH:
         return this.#readHashBody(false);
-      case TYPE_HASH_WITH_DEFAULT:
+      case TYPE_HASH_DEF:
         return this.#readHashBody(true);
       case TYPE_STRING:
         return this.#readStringBody();
@@ -131,7 +131,7 @@ export class Loader {
         return this.#readIvars(this.#readArrayBody());
       case TYPE_HASH:
         return this.#readIvars(this.#readHashBody(false));
-      case TYPE_HASH_WITH_DEFAULT:
+      case TYPE_HASH_DEF:
         return this.#readIvars(this.#readHashBody(true));
       case TYPE_STRING:
         return this.#readIvars(this.#readStringBody());

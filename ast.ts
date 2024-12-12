@@ -3,7 +3,7 @@
  *   for the Marshal format, but the file is named AST for familiarity.
  */
 
-import { RSymbol } from "./rom.ts";
+import { REncoding, RSymbol } from "./rom.ts";
 
 /**
  * A node in the graph.
@@ -146,6 +146,12 @@ export type MarshalHash = {
   entries: [MarshalValue, MarshalValue][];
   defaultValue: MarshalValue | undefined;
   /**
+   * Is this a wrapper Hash object generated
+   * for a set of keyword parameters passed
+   * to a Method/Proc with ruby2_keywords flag?
+   */
+  ruby2Keywords: boolean;
+  /**
    * Missing className indicates that the object is
    * a direct instance of Hash.
    */
@@ -157,6 +163,7 @@ export type MarshalHash = {
 };
 export type MarshalHashOptions = {
   defaultValue?: MarshalValue | undefined;
+  ruby2Keywords?: boolean;
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
@@ -166,12 +173,19 @@ export function MarshalHash(
   entries: [MarshalValue, MarshalValue][],
   options: MarshalHashOptions = {},
 ): MarshalHash {
-  const { defaultValue, className, ivars = new Map(), extenders = [], cycle } =
-    options;
+  const {
+    defaultValue,
+    ruby2Keywords = false,
+    className,
+    ivars = new Map(),
+    extenders = [],
+    cycle,
+  } = options;
   return {
     type: "Hash",
     entries,
     defaultValue,
+    ruby2Keywords,
     className,
     ivars,
     extenders,
@@ -186,7 +200,7 @@ export function MarshalHash(
 export type MarshalString = {
   type: "String";
   bytes: Uint8Array;
-  encoding: string;
+  encoding: REncoding;
   /**
    * Missing className indicates that the object is
    * a direct instance of String.
@@ -205,7 +219,7 @@ export type MarshalStringOptions = {
 };
 export function MarshalString(
   bytes: Uint8Array,
-  encoding: string,
+  encoding: REncoding,
   options: MarshalStringOptions = {},
 ): MarshalString {
   const { className, ivars = new Map(), extenders = [], cycle } = options;
@@ -227,9 +241,46 @@ export function MarshalString(
 export type MarshalRegexp = {
   type: "Regexp";
   sourceBytes: Uint8Array;
-  encoding: string;
-  options: number;
-  ruby18compat: boolean;
+  /**
+   * The encoding of the source string.
+   * If the encoding is ASCII-compatible and the
+   * sourceBytes are all ASCII characters, the
+   * encoding should be US-ASCII, with the exception
+   * that if the object originates from a regexp literal,
+   * the following encodings are additionally allowed:
+   *
+   * - EUC-JP
+   * - Windows-31J
+   * - UTF-8
+   *
+   * If ruby18Compat is true, the encoding should be
+   * one of the following:
+   *
+   * - US-ASCII
+   * - ASCII-8BIT
+   * - EUC-JP
+   * - Windows-31J
+   * - UTF-8
+   */
+  encoding: REncoding;
+  ignoreCase: boolean;
+  extended: boolean;
+  multiline: boolean;
+  /**
+   * Indicates existence of /../n flag.
+   * It should only be set if the source encoding
+   * is US-ASCII or ASCII-8BIT.
+   *
+   * For Ruby >= 1.9, this is almost meaningless
+   * but reflected in Regexp::NOENCODING flag.
+   *
+   * For Ruby <= 1.8, it means that the `encoding`
+   * value of US-ASCII or ASCII-8BIT is effective.
+   * Otherwise the encoding is meaningless and
+   * $KCODE value at runtime is preferred.
+   */
+  noEncoding: boolean;
+  ruby18Compat: boolean;
   /**
    * Missing className indicates that the object is
    * a direct instance of Regexp.
@@ -241,7 +292,11 @@ export type MarshalRegexp = {
   cycle: boolean | undefined;
 };
 export type MarshalRegexpOptions = {
-  ruby18compat?: boolean | undefined;
+  ignoreCase?: boolean | undefined;
+  extended?: boolean | undefined;
+  multiline?: boolean | undefined;
+  noEncoding?: boolean | undefined;
+  ruby18Compat?: boolean | undefined;
   className?: RSymbol | undefined;
   ivars?: Map<RSymbol, MarshalValue> | undefined;
   extenders?: RSymbol[] | undefined;
@@ -249,23 +304,29 @@ export type MarshalRegexpOptions = {
 };
 export function MarshalRegexp(
   sourceBytes: Uint8Array,
-  encoding: string,
-  options: number,
-  options_: MarshalRegexpOptions = {},
+  encoding: REncoding,
+  options: MarshalRegexpOptions = {},
 ): MarshalRegexp {
   const {
-    ruby18compat = false,
+    ignoreCase = false,
+    extended = false,
+    multiline = false,
+    noEncoding = false,
+    ruby18Compat = false,
     className,
     ivars = new Map(),
     extenders = [],
     cycle,
-  } = options_;
+  } = options;
   return {
     type: "Regexp",
     sourceBytes,
     encoding,
-    options,
-    ruby18compat,
+    ignoreCase,
+    extended,
+    multiline,
+    noEncoding,
+    ruby18Compat,
     className,
     ivars,
     extenders,

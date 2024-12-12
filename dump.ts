@@ -10,7 +10,7 @@ import {
   TYPE_FIXNUM,
   TYPE_FLOAT,
   TYPE_HASH,
-  TYPE_HASH_WITH_DEFAULT,
+  TYPE_HASH_DEF,
   TYPE_IVAR,
   TYPE_LINK,
   TYPE_NIL,
@@ -216,7 +216,7 @@ class Dumper {
 
     const defaultValue = value.defaultValue;
 
-    this.#writeByte(defaultValue == null ? TYPE_HASH : TYPE_HASH_WITH_DEFAULT);
+    this.#writeByte(defaultValue == null ? TYPE_HASH : TYPE_HASH_DEF);
     let length = +value.entries.length;
     this.#writeFixnum(length);
     for (const [entryKey, entryValue] of value.entries) {
