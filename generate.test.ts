@@ -352,11 +352,18 @@ Deno.test("generate generates Symbol link - symbols with same encoding", () => {
   );
 });
 
-Deno.test("generate generates Object", () => {
+Deno.test("generate generates Object - simple case", () => {
   assertEquals(
     generate(MarshalObject("Object", new Map())),
     seq("\x04\x08", "o:", 6, "Object", 0),
   );
+  assertEquals(
+    generate(MarshalObject("MyClass", new Map())),
+    seq("\x04\x08", "o:", 7, "MyClass", 0),
+  );
+});
+
+Deno.test("generate generates Object - with ivars", () => {
   assertEquals(
     generate(
       MarshalObject(
@@ -374,6 +381,23 @@ Deno.test("generate generates Object", () => {
       2,
       ...[":", 4, "@foo", "i", 42],
       ...[":", 4, "@bar", ":", 3, "baz"],
+    ),
+  );
+});
+
+Deno.test("generate generates Object - with extenders", () => {
+  assertEquals(
+    generate(MarshalObject("MyClass", new Map(), {
+      extenders: ["Mod1", "Mあ"],
+    })),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      ...["eI:", 4, "M\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      "o:",
+      7,
+      "MyClass",
+      0,
     ),
   );
 });
@@ -673,6 +697,40 @@ Deno.test("generate generates links - unlinks different Floats", () => {
       2,
       ...["f", 1, "1"],
       ...["f", 1, "1"],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Objects", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [MarshalArray([]), MarshalObject("MyClass", new Map())],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["o:", 7, "MyClass", 0],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Objects", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalObject("MyClass", new Map()),
+      MarshalObject("MyClass", new Map()),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["o:", 7, "MyClass", 0],
+      ...["o;", 0, 0],
     ),
   );
 });
