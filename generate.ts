@@ -238,14 +238,9 @@ class Generator {
     const numIvars = this.#writeObjectHead(value);
 
     this.#writeByte(TYPE_ARRAY);
-    let length = +value.elements.length;
-    this.#writeLong(length);
+    this.#writeLong(value.elements.length);
     for (const elem of value.elements) {
-      --length;
       this.#writeValue(elem);
-    }
-    if (length !== 0) {
-      throw new Error("Array length mismatch");
     }
     this.#writeIvars(value, numIvars);
   }
@@ -260,15 +255,10 @@ class Generator {
     this.#writeByte(
       defaultValue == null ? TYPE_HASH : TYPE_HASH_DEF,
     );
-    let length = +value.entries.length;
-    this.#writeLong(length);
+    this.#writeLong(value.entries.length);
     for (const [entryKey, entryValue] of value.entries) {
-      --length;
       this.#writeValue(entryKey);
       this.#writeValue(entryValue);
-    }
-    if (length !== 0) {
-      throw new Error("Hash length mismatch");
     }
     if (defaultValue != null) {
       this.#writeValue(defaultValue);
@@ -282,13 +272,8 @@ class Generator {
     }
     const numIvars = this.#writeObjectHead(value);
 
-    const bytes = value.bytes;
-    if (!(bytes instanceof Uint8Array)) {
-      throw new Error("Not a byte array");
-    }
-
     this.#writeByte(TYPE_STRING);
-    this.#writeBytes(bytes);
+    this.#writeBytes(value.bytes);
     this.#writeIvars(value, numIvars);
   }
 
@@ -298,13 +283,8 @@ class Generator {
     }
     const numIvars = this.#writeObjectHead(value);
 
-    const sourceBytes = value.sourceBytes;
-    if (!(sourceBytes instanceof Uint8Array)) {
-      throw new Error("Not a byte array");
-    }
-
     this.#writeByte(TYPE_REGEXP);
-    this.#writeBytes(sourceBytes);
+    this.#writeBytes(value.sourceBytes);
     let flags = (value.ignoreCase ? 1 : 0) | (value.multiline ? 2 : 0) |
       (value.extended ? 4 : 0);
     if (value.ruby18Compat) {
@@ -501,15 +481,10 @@ class Generator {
     }
     this.#writeByte(TYPE_STRUCT);
     this.#writeSymbolValue(value.className);
-    let numEntries = +value.entries.length;
-    this.#writeLong(numEntries);
+    this.#writeLong(value.entries.length);
     for (const [eKey, eValue] of value.entries) {
-      --numEntries;
       this.#writeSymbolValue(eKey);
       this.#writeValue(eValue);
-    }
-    if (numEntries !== 0) {
-      throw new Error("Struct length mismatch");
     }
   }
 
