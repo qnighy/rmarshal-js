@@ -596,6 +596,15 @@ Deno.test("generate generates String - ASCII-8BIT simple", () => {
   );
 });
 
+Deno.test("generate generates String - US-ASCII simple", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII),
+    ),
+    seq("\x04\x08", 'I"', 3, "foo", 1, ":", 1, "E", "F"),
+  );
+});
+
 Deno.test("generate generates String - UTF-8 simple", () => {
   assertEquals(
     generate(
@@ -637,6 +646,24 @@ Deno.test("generate generates String - ASCII-8BIT with ivars", () => {
   );
 });
 
+Deno.test("generate generates String - US-ASCII with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...['"', 3, "foo"],
+      2,
+      ...[":", 1, "E", "F"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
 Deno.test("generate generates String - UTF-8 with ivars", () => {
   assertEquals(
     generate(
@@ -650,6 +677,71 @@ Deno.test("generate generates String - UTF-8 with ivars", () => {
       ...['"', 3, "\xE3\x81\x82"],
       2,
       ...[":", 1, "E", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates String - other encoding with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...['"', 2, "\x82\xA0"],
+      2,
+      ...[":", 8, "encoding", '"', 11, "Windows-31J"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates String - with custom class", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        className: "MyString",
+      }),
+    ),
+    seq("\x04\x08", "C:", 8, "MyString", '"', 3, "foo"),
+  );
+});
+
+Deno.test("generate generates String - with extenders", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      ...['"', 3, "foo"],
+    ),
+  );
+});
+
+Deno.test("generate generates String - with all", () => {
+  assertEquals(
+    generate(
+      MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        className: "MyString",
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyString"],
+      ...['"', 3, "foo"],
+      1,
       ...[":", 4, "@foo", "i", 42],
     ),
   );
@@ -907,6 +999,78 @@ Deno.test("generate generates links - unlinks different Hashes", () => {
       2,
       ...["{", 0],
       ...["{", 0],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Strings", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalString(Uint8Array.from([]), REncoding.ASCII_8BIT),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...['"', 0],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Strings", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalString(Uint8Array.from([]), REncoding.ASCII_8BIT),
+      MarshalString(Uint8Array.from([]), REncoding.ASCII_8BIT),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...['"', 0],
+      ...['"', 0],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Encoding names", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalString(Uint8Array.from([]), REncoding.Windows_31J),
+      MarshalString(Uint8Array.from([]), REncoding.Windows_31J),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...['I"', 0, 1, ":", 8, "encoding", '"', 11, "Windows-31J"],
+      ...['I"', 0, 1, ";", 0, "@", 2],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks Encoding names from other strings", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalString(Uint8Array.from([]), REncoding.Windows_31J),
+      MarshalString(
+        new TextEncoder().encode("Windows-31J"),
+        REncoding.ASCII_8BIT,
+      ),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...['I"', 0, 1, ":", 8, "encoding", '"', 11, "Windows-31J"],
+      ...['"', 11, "Windows-31J"],
     ),
   );
 });
