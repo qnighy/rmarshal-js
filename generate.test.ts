@@ -217,6 +217,14 @@ Deno.test("generate generates Float integers in scientific notation", () => {
 
 Deno.test("generate generates Float non-scientific fractions", () => {
   assertEquals(
+    generate(MarshalFloat(1.1)),
+    seq("\x04\x08", "f", 3, "1.1"),
+  );
+  assertEquals(
+    generate(MarshalFloat(-1.1)),
+    seq("\x04\x08", "f", 4, "-1.1"),
+  );
+  assertEquals(
     generate(MarshalFloat(0.0001)),
     seq("\x04\x08", "f", 6, "0.0001"),
   );
@@ -638,21 +646,33 @@ Deno.test("generate generates links - unlinks different Bignums", () => {
   );
 });
 
-Deno.test("generate generates links - counts Float", () => {
+Deno.test("generate generates links - links same Floats", () => {
   assertEquals(
     generate(
       setupLink(
-        [MarshalArray([]), MarshalArray([])],
-        (a, b) => a.elements.push(MarshalFloat(1), b, b),
+        [MarshalArray([]), MarshalFloat(1)],
+        (a, b) => a.elements.push(b, b),
       ),
     ),
     seq(
       "\x04\x08",
       "[",
-      3,
+      2,
       ...["f", 1, "1"],
-      ...["[", 0],
-      ...["@", 2],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Floats", () => {
+  assertEquals(
+    generate(MarshalArray([MarshalFloat(1), MarshalFloat(1)])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["f", 1, "1"],
+      ...["f", 1, "1"],
     ),
   );
 });
