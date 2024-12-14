@@ -1,18 +1,18 @@
 import {
   type MarshalArray,
   type MarshalBoolean,
-  MarshalDump,
-  MarshalDumpBytes,
-  MarshalDumpData,
+  type MarshalDump,
+  type MarshalDumpBytes,
+  type MarshalDumpData,
   type MarshalFloat,
   type MarshalHash,
   type MarshalInteger,
-  MarshalModule,
+  type MarshalModule,
   type MarshalNil,
   type MarshalObject,
   type MarshalRegexp,
   MarshalString,
-  MarshalStruct,
+  type MarshalStruct,
   type MarshalSymbol,
   type MarshalValue,
 } from "./ast.ts";
@@ -55,7 +55,7 @@ export function generate(value: MarshalValue): Uint8Array {
   return generator.result();
 }
 
-export function generateAll(values: MarshalValue[]): Uint8Array {
+export function generateAll(values: Iterable<MarshalValue>): Uint8Array {
   const generator = new Generator();
   for (const value of values) {
     generator.writeTopLevel(value);
@@ -132,6 +132,11 @@ class Generator {
       case "Module":
         this.#writeModule(value);
         break;
+      default: {
+        throw new Error(
+          `Unsupported value type: ${(value as { type: "$invalid" }).type}`,
+        );
+      }
     }
   }
 
@@ -147,15 +152,16 @@ class Generator {
     const num = value.value;
     if (-0x40000000n <= num && num < 0x40000000n) {
       this.#writeByte(TYPE_FIXNUM);
-      this.#writeLong(Number(value));
+      this.#writeLong(Number(num));
+      return;
     }
     if (this.#tryWriteLink(value)) {
       return;
     }
 
     this.#writeByte(TYPE_BIGNUM);
-    this.#writeByte(value.value >= 0n ? SIGN_POSITIVE : SIGN_NEGATIVE);
-    const abs = value.value >= 0n ? value.value : -value.value;
+    this.#writeByte(num >= 0n ? SIGN_POSITIVE : SIGN_NEGATIVE);
+    const abs = num >= 0n ? num : -num;
     let numWords = 0;
     {
       let current = abs;
@@ -388,6 +394,9 @@ class Generator {
       | MarshalRegexp,
     numIvars: number,
   ) {
+    if (value.type !== "Object" && numIvars === 0) {
+      return;
+    }
     this.#writeLong(numIvars);
     switch (value.type) {
       case "Hash":
