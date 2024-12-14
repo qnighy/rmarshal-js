@@ -1,6 +1,6 @@
 import {
   type MarshalArray,
-  type MarshalBoolean,
+  MarshalBoolean,
   type MarshalDump,
   type MarshalDumpBytes,
   type MarshalDumpData,
@@ -215,8 +215,11 @@ class Generator {
       this.#writeByte(TYPE_IVAR);
       this.#writeByte(TYPE_SYMBOL);
       this.#writeBytes(bytes);
+
+      const [encKey, encVal] = this.#encodingPair(encoding);
       this.#writeLong(1);
-      this.#writeEncodingPair(encoding);
+      this.#writeSymbolValue(encKey);
+      this.#writeValue(encVal);
     }
   }
 
@@ -224,192 +227,165 @@ class Generator {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    const numIvars = this.#writeObjectHead(value);
 
+    for (const extender of value.extenders) {
+      this.#writeByte(TYPE_EXTENDED);
+      this.#writeSymbolValue(extender);
+    }
     this.#writeByte(TYPE_OBJECT);
     this.#writeSymbolValue(value.className);
-    this.#writeIvars(value, numIvars);
+    this.#writeLong(value.ivars.size);
+    for (const [key, val] of value.ivars) {
+      this.#writeSymbolValue(key);
+      this.#writeValue(val);
+    }
   }
 
   #writeArray(value: MarshalArray) {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    const numIvars = this.#writeObjectHead(value);
 
-    this.#writeByte(TYPE_ARRAY);
-    this.#writeLong(value.elements.length);
-    for (const elem of value.elements) {
-      this.#writeValue(elem);
-    }
-    this.#writeIvars(value, numIvars);
+    this.#wrapAHSR(value, undefined, () => {
+      this.#writeByte(TYPE_ARRAY);
+      this.#writeLong(value.elements.length);
+      for (const elem of value.elements) {
+        this.#writeValue(elem);
+      }
+    });
   }
 
   #writeHash(value: MarshalHash) {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    const numIvars = this.#writeObjectHead(value);
 
-    const defaultValue = value.defaultValue;
-    this.#writeByte(
-      defaultValue == null ? TYPE_HASH : TYPE_HASH_DEF,
-    );
-    this.#writeLong(value.entries.length);
-    for (const [entryKey, entryValue] of value.entries) {
-      this.#writeValue(entryKey);
-      this.#writeValue(entryValue);
-    }
-    if (defaultValue != null) {
-      this.#writeValue(defaultValue);
-    }
-    this.#writeIvars(value, numIvars);
+    const extraIvars: [RSymbol, MarshalValue][] | undefined =
+      value.ruby2Keywords ? [["K", MarshalBoolean(true)]] : undefined;
+    this.#wrapAHSR(value, extraIvars, () => {
+      const defaultValue = value.defaultValue;
+      this.#writeByte(
+        defaultValue == null ? TYPE_HASH : TYPE_HASH_DEF,
+      );
+      this.#writeLong(value.entries.length);
+      for (const [entryKey, entryValue] of value.entries) {
+        this.#writeValue(entryKey);
+        this.#writeValue(entryValue);
+      }
+      if (defaultValue != null) {
+        this.#writeValue(defaultValue);
+      }
+    });
   }
 
   #writeString(value: MarshalString) {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    const numIvars = this.#writeObjectHead(value);
-
-    this.#writeByte(TYPE_STRING);
-    this.#writeBytes(value.bytes);
-    this.#writeIvars(value, numIvars);
+    const extraIvars: [RSymbol, MarshalValue][] | undefined =
+      value.encoding !== REncoding.ASCII_8BIT
+        ? [this.#encodingPair(value.encoding)]
+        : undefined;
+    this.#wrapAHSR(value, extraIvars, () => {
+      this.#writeByte(TYPE_STRING);
+      this.#writeBytes(value.bytes);
+    });
   }
 
   #writeRegexp(value: MarshalRegexp) {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    const numIvars = this.#writeObjectHead(value);
 
-    this.#writeByte(TYPE_REGEXP);
-    this.#writeBytes(value.sourceBytes);
-    let flags = (value.ignoreCase ? 1 : 0) | (value.multiline ? 2 : 0) |
-      (value.extended ? 4 : 0);
-    if (value.ruby18Compat) {
-      switch (value.encoding) {
-        case REncoding.US_ASCII:
-        case REncoding.ASCII_8BIT:
-          if (value.noEncoding) {
-            flags |= 0x10;
-          }
-          break;
-        case REncoding.EUC_JP:
+    const extraIvars: [RSymbol, MarshalValue][] | undefined =
+      value.encoding !== REncoding.ASCII_8BIT && !value.ruby18Compat
+        ? [this.#encodingPair(value.encoding)]
+        : undefined;
+    this.#wrapAHSR(value, extraIvars, () => {
+      this.#writeByte(TYPE_REGEXP);
+      this.#writeBytes(value.sourceBytes);
+      let flags = (value.ignoreCase ? 1 : 0) | (value.multiline ? 2 : 0) |
+        (value.extended ? 4 : 0);
+      if (value.ruby18Compat) {
+        switch (value.encoding) {
+          case REncoding.US_ASCII:
+          case REncoding.ASCII_8BIT:
+            if (value.noEncoding) {
+              flags |= 0x10;
+            }
+            break;
+          case REncoding.EUC_JP:
+            flags |= 0x20;
+            break;
+          case REncoding.Windows_31J:
+            flags |= 0x30;
+            break;
+          case REncoding.UTF_8:
+            flags |= 0x40;
+            break;
+          default:
+            throw new Error(
+              `Invalid Regexp encoding with ruby18Compat: ${value.encoding.name}`,
+            );
+        }
+      } else {
+        if (
+          (value.encoding !== REncoding.ASCII_8BIT &&
+            value.encoding !== REncoding.US_ASCII) ||
+          !value.sourceBytes.every((b) => b < 0x80)
+        ) {
+          flags |= 0x10;
+        }
+        if (value.noEncoding) {
           flags |= 0x20;
-          break;
-        case REncoding.Windows_31J:
-          flags |= 0x30;
-          break;
-        case REncoding.UTF_8:
-          flags |= 0x40;
-          break;
-        default:
-          throw new Error(
-            `Invalid Regexp encoding with ruby18Compat: ${value.encoding.name}`,
-          );
+        }
       }
-    } else {
-      if (
-        (value.encoding !== REncoding.ASCII_8BIT &&
-          value.encoding !== REncoding.US_ASCII) ||
-        !value.sourceBytes.every((b) => b < 0x80)
-      ) {
-        flags |= 0x10;
-      }
-      if (value.noEncoding) {
-        flags |= 0x20;
-      }
-    }
-    this.#writeByte(flags);
-    this.#writeIvars(value, numIvars);
+      this.#writeByte(flags);
+    });
   }
 
-  #writeObjectHead(
-    value:
-      | MarshalObject
-      | MarshalArray
-      | MarshalHash
-      | MarshalString
-      | MarshalRegexp,
-  ): number {
-    let numIvars = value.ivars.size;
-    switch (value.type) {
-      case "Hash":
-        if (value.ruby2Keywords) {
-          ++numIvars;
-        }
-        break;
-      case "String":
-        if (value.encoding !== REncoding.ASCII_8BIT) {
-          ++numIvars;
-        }
-        break;
-      case "Regexp":
-        if (value.encoding !== REncoding.ASCII_8BIT && !value.ruby18Compat) {
-          ++numIvars;
-        }
-        break;
-    }
-    if (numIvars > 0 && value.type !== "Object") {
+  /**
+   * Wrap AHSR (Array, Hash, String, Regexp) objects with ivars
+   * and other metadata.
+   */
+  #wrapAHSR(
+    value: {
+      className: RSymbol | undefined;
+      ivars: Map<RSymbol, MarshalValue>;
+      extenders: RSymbol[];
+    },
+    extraIvars: [RSymbol, MarshalValue][] | undefined,
+    write: () => void,
+  ) {
+    const numIvars = (extraIvars?.length ?? 0) + value.ivars.size;
+    if (numIvars > 0) {
       this.#writeByte(TYPE_IVAR);
     }
     for (const extender of value.extenders) {
       this.#writeByte(TYPE_EXTENDED);
       this.#writeSymbolValue(extender);
     }
-    if (value.type !== "Object" && value.className != null) {
+    if (value.className != null) {
       this.#writeByte(TYPE_UCLASS);
       this.#writeSymbolValue(value.className);
     }
-    return numIvars;
-  }
-
-  #writeIvars(
-    value:
-      | MarshalObject
-      | MarshalArray
-      | MarshalHash
-      | MarshalString
-      | MarshalRegexp,
-    numIvars: number,
-  ) {
-    if (value.type !== "Object" && numIvars === 0) {
-      return;
-    }
-    this.#writeLong(numIvars);
-    switch (value.type) {
-      case "Hash":
-        if (value.ruby2Keywords) {
-          --numIvars;
-          this.#writeSymbolValue("K");
-          this.#writeByte(TYPE_TRUE);
+    write();
+    if (numIvars > 0) {
+      this.#writeLong(numIvars);
+      if (extraIvars != null) {
+        for (const [key, val] of extraIvars) {
+          this.#writeSymbolValue(key);
+          this.#writeValue(val);
         }
-        break;
-      case "String":
-        if (value.encoding !== REncoding.ASCII_8BIT) {
-          --numIvars;
-          this.#writeEncodingPair(value.encoding);
-        }
-        break;
-      case "Regexp":
-        if (value.encoding !== REncoding.ASCII_8BIT && !value.ruby18Compat) {
-          --numIvars;
-          this.#writeEncodingPair(value.encoding);
-        }
-        break;
-    }
-    for (const [key, val] of value.ivars) {
-      --numIvars;
-      this.#writeSymbolValue(key);
-      this.#writeValue(val);
-    }
-    if (numIvars !== 0) {
-      throw new Error("Ivar count mismatch");
+      }
+      for (const [key, val] of value.ivars) {
+        this.#writeSymbolValue(key);
+        this.#writeValue(val);
+      }
     }
   }
 
-  #writeEncodingPair(enc: REncoding) {
+  #encodingPair(enc: REncoding): [RSymbol, MarshalValue] {
     if (enc === REncoding.ASCII_8BIT) {
       throw new Error("ASCII-8BIT should not be encoded explicitly");
     }
@@ -417,17 +393,16 @@ class Generator {
       enc === REncoding.UTF_8 ||
       enc === REncoding.US_ASCII
     ) {
-      this.#writeSymbolValue("E");
-      this.#writeByte(
-        enc === REncoding.UTF_8 ? TYPE_TRUE : TYPE_FALSE,
-      );
+      return ["E", MarshalBoolean(enc === REncoding.UTF_8)];
     } else {
-      this.#writeSymbolValue("encoding");
-      this.#writeEncodingName(enc);
+      return [
+        "encoding",
+        this.#encodingName(enc),
+      ];
     }
   }
 
-  #writeEncodingName(enc: REncoding) {
+  #encodingName(enc: REncoding): MarshalString {
     let name = this.#encodingNames.get(enc);
     if (name == null) {
       name = MarshalString(
@@ -436,7 +411,7 @@ class Generator {
       );
       this.#encodingNames.set(enc, name);
     }
-    this.#writeString(name);
+    return name;
   }
 
   #writeDump(value: MarshalDump) {
@@ -461,8 +436,10 @@ class Generator {
       this.#writeByte(TYPE_USERDEF);
       this.#writeSymbolValue(value.className);
       this.#writeBytes(value.bytes);
+      const [encKey, encVal] = this.#encodingPair(value.encoding);
       this.#writeLong(1);
-      this.#writeEncodingPair(value.encoding);
+      this.#writeSymbolValue(encKey);
+      this.#writeValue(encVal);
     }
   }
 
