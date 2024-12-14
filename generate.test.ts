@@ -15,6 +15,7 @@ import {
   MarshalObject,
   MarshalRegexp,
   MarshalString,
+  MarshalStruct,
   MarshalSymbol,
   MarshalValue,
 } from "./ast.ts";
@@ -1184,6 +1185,26 @@ Deno.test("generate generates DumpData - simple case", () => {
   );
 });
 
+Deno.test("generate generates Struct - simple case", () => {
+  assertEquals(
+    generate(
+      MarshalStruct("Reline::Key", [["char", MarshalNil()], [
+        "combined_char",
+        MarshalNil(),
+      ], ["with_meta", MarshalBoolean(false)]]),
+    ),
+    seq(
+      "\x04\x08",
+      "S",
+      ...[":", 11, "Reline::Key"],
+      3,
+      ...[":", 4, "char", "0"],
+      ...[":", 13, "combined_char", "0"],
+      ...[":", 9, "with_meta", "F"],
+    ),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1677,6 +1698,79 @@ Deno.test("generate generates links - unlinks different DumpData", () => {
       2,
       ...["d:", 11, "DumpableDir", 'I"', 1, ".", 1, ":", 1, "E", "T"],
       ...["d;", 0, 'I"', 1, ".", 1, ";", 1, "T"],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Struct", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalStruct(
+            "Reline::Key",
+            [["char", MarshalNil()], ["combined_char", MarshalNil()], [
+              "with_meta",
+              MarshalBoolean(false),
+            ]],
+          ),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...[
+        ...["S", ":", 11, "Reline::Key"],
+        3,
+        ...[":", 4, "char", "0"],
+        ...[":", 13, "combined_char", "0"],
+        ...[":", 9, "with_meta", "F"],
+      ],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Struct", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalStruct(
+        "Reline::Key",
+        [["char", MarshalNil()], ["combined_char", MarshalNil()], [
+          "with_meta",
+          MarshalBoolean(false),
+        ]],
+      ),
+      MarshalStruct(
+        "Reline::Key",
+        [["char", MarshalNil()], ["combined_char", MarshalNil()], [
+          "with_meta",
+          MarshalBoolean(false),
+        ]],
+      ),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...[
+        ...["S", ":", 11, "Reline::Key"],
+        3,
+        ...[":", 4, "char", "0"],
+        ...[":", 13, "combined_char", "0"],
+        ...[":", 9, "with_meta", "F"],
+      ],
+      ...[
+        ...["S", ";", 0],
+        3,
+        ...[";", 1, "0"],
+        ...[";", 2, "0"],
+        ...[";", 3, "F"],
+      ],
     ),
   );
 });
