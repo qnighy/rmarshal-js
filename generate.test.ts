@@ -7,6 +7,7 @@ import {
   MarshalBoolean,
   MarshalDump,
   MarshalDumpBytes,
+  MarshalDumpData,
   MarshalFloat,
   MarshalHash,
   MarshalInteger,
@@ -1171,6 +1172,18 @@ Deno.test("generate generates DumpBytes - US-ASCII", () => {
   );
 });
 
+Deno.test("generate generates DumpData - simple case", () => {
+  assertEquals(
+    generate(
+      MarshalDumpData(
+        "DumpableDir",
+        MarshalString(Uint8Array.from([0x2E]), REncoding.UTF_8),
+      ),
+    ),
+    seq("\x04\x08", "d:", 11, "DumpableDir", 'I"', 1, ".", 1, ":", 1, "E", "T"),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1618,6 +1631,52 @@ Deno.test("generate generates links - unlinks different DumpBytes", () => {
       2,
       ...["u:", 10, "BigDecimal", 9, "9:0.123e3"],
       ...["u;", 0, 9, "9:0.123e3"],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same DumpData", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalDumpData(
+            "DumpableDir",
+            MarshalString(Uint8Array.from([0x2E]), REncoding.UTF_8),
+          ),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["d:", 11, "DumpableDir", 'I"', 1, ".", 1, ":", 1, "E", "T"],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different DumpData", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalDumpData(
+        "DumpableDir",
+        MarshalString(Uint8Array.from([0x2E]), REncoding.UTF_8),
+      ),
+      MarshalDumpData(
+        "DumpableDir",
+        MarshalString(Uint8Array.from([0x2E]), REncoding.UTF_8),
+      ),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["d:", 11, "DumpableDir", 'I"', 1, ".", 1, ":", 1, "E", "T"],
+      ...["d;", 0, 'I"', 1, ".", 1, ";", 1, "T"],
     ),
   );
 });
