@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { REncoding, RSymbol } from "./rom.ts";
-import { generate } from "./generate.ts";
+import { generate, generateAll } from "./generate.ts";
 import { seq } from "./testutil.ts";
 import {
   MarshalArray,
@@ -114,6 +114,50 @@ Deno.test("generate generates Fixnum in negative 4-byte form", () => {
   assertEquals(
     generate(MarshalInteger(-0x40000000n)),
     seq("\x04\x08", "i\xFC\x00\x00\x00\xC0"),
+  );
+});
+
+Deno.test("generate generates Bignum - positive 2-word form", () => {
+  assertEquals(
+    generate(MarshalInteger(1073741824n)),
+    seq("\x04\x08", "l+", 2, "\x00\x00\x00\x40"),
+  );
+  assertEquals(
+    generate(MarshalInteger(4294967295n)),
+    seq("\x04\x08", "l+", 2, "\xFF\xFF\xFF\xFF"),
+  );
+});
+
+Deno.test("generate generates Bignum - negative 2-word form", () => {
+  assertEquals(
+    generate(MarshalInteger(-1073741825n)),
+    seq("\x04\x08", "l-", 2, "\x01\x00\x00\x40"),
+  );
+  assertEquals(
+    generate(MarshalInteger(-4294967295n)),
+    seq("\x04\x08", "l-", 2, "\xFF\xFF\xFF\xFF"),
+  );
+});
+
+Deno.test("generate generates Bignum - positive 3-word form", () => {
+  assertEquals(
+    generate(MarshalInteger(4294967296n)),
+    seq("\x04\x08", "l+", 3, "\x00\x00\x00\x00\x01\x00"),
+  );
+  assertEquals(
+    generate(MarshalInteger(281474976710655n)),
+    seq("\x04\x08", "l+", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
+  );
+});
+
+Deno.test("generate generates Bignum - negative 3-word form", () => {
+  assertEquals(
+    generate(MarshalInteger(-4294967296n)),
+    seq("\x04\x08", "l-", 3, "\x00\x00\x00\x00\x01\x00"),
+  );
+  assertEquals(
+    generate(MarshalInteger(-281474976710655n)),
+    seq("\x04\x08", "l-", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
   );
 });
 
@@ -558,21 +602,38 @@ Deno.test("generate generates links - skips Symbol", () => {
   );
 });
 
-Deno.test("generate generates links - counts Bignum", () => {
+Deno.test("generate generates links - links same Bignums", () => {
   assertEquals(
     generate(
       setupLink(
-        [MarshalArray([]), MarshalArray([])],
-        (a, b) => a.elements.push(MarshalInteger(0x100000000n), b, b),
+        [MarshalArray([]), MarshalInteger(0x100000000n)],
+        (a, b) => a.elements.push(b, b),
       ),
     ),
     seq(
       "\x04\x08",
       "[",
-      3,
+      2,
       ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
-      ...["[", 0],
-      ...["@", 2],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Bignums", () => {
+  assertEquals(
+    generate(
+      MarshalArray([
+        MarshalInteger(0x100000000n),
+        MarshalInteger(0x100000000n),
+      ]),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
+      ...["l+", 3, "\x00\x00\x00\x00\x01\x00"],
     ),
   );
 });
@@ -592,6 +653,40 @@ Deno.test("generate generates links - counts Float", () => {
       ...["f", 1, "1"],
       ...["[", 0],
       ...["@", 2],
+    ),
+  );
+});
+
+Deno.test("generateAll generates multiple values", () => {
+  assertEquals(
+    generateAll([MarshalNil(), MarshalInteger(42n)]),
+    seq("\x04\x08", "0", "\x04\x08", "i", 42),
+  );
+});
+
+Deno.test("generateAll resets Symbol link counts", () => {
+  assertEquals(
+    generateAll([
+      MarshalArray([MarshalSymbol("foo"), MarshalSymbol("foo")]),
+      MarshalArray([MarshalSymbol("foo"), MarshalSymbol("foo")]),
+    ]),
+    seq(
+      ...["\x04\x08", "[", 2, ":", 3, "foo", ";", 0],
+      ...["\x04\x08", "[", 2, ":", 3, "foo", ";", 0],
+    ),
+  );
+});
+
+Deno.test("generateAll resets link counts", () => {
+  const obj = MarshalArray([]);
+  assertEquals(
+    generateAll([
+      MarshalArray([obj, obj]),
+      MarshalArray([obj, obj]),
+    ]),
+    seq(
+      ...["\x04\x08", "[", 2, "[", 0, "@", 1],
+      ...["\x04\x08", "[", 2, "[", 0, "@", 1],
     ),
   );
 });
