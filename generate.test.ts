@@ -10,6 +10,7 @@ import {
   MarshalInteger,
   MarshalNil,
   MarshalObject,
+  MarshalRegexp,
   MarshalString,
   MarshalSymbol,
   MarshalValue,
@@ -747,6 +748,379 @@ Deno.test("generate generates String - with all", () => {
   );
 });
 
+Deno.test("generate generates Regexp - ASCII-8BIT simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x00"),
+  );
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
+    ),
+    seq("\x04\x08", "/", 3, "\xE3\x81\x82", "\x10"),
+  );
+});
+
+Deno.test("generate generates Regexp - US-ASCII simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII),
+    ),
+    seq("\x04\x08", "I/", 3, "foo", "\x00", 1, ":", 1, "E", "F"),
+  );
+});
+
+Deno.test("generate generates Regexp - UTF-8 simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8),
+    ),
+    seq("\x04\x08", "I/", 3, "\xE3\x81\x82", "\x10", 1, ":", 1, "E", "T"),
+  );
+});
+
+Deno.test("generate generates Regexp - other encoding simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J),
+    ),
+    seq(
+      "\x04\x08",
+      "I/",
+      2,
+      "\x82\xA0",
+      "\x10",
+      1,
+      ":",
+      8,
+      "encoding",
+      '"',
+      11,
+      "Windows-31J",
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp - with ignoreCase", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ignoreCase: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x01"),
+  );
+});
+
+Deno.test("generate generates Regexp - with multiline", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        multiline: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x02"),
+  );
+});
+
+Deno.test("generate generates Regexp - with extended", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        extended: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x04"),
+  );
+});
+
+Deno.test("generate generates Regexp - with noEncoding", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        noEncoding: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x20"),
+  );
+});
+
+Deno.test("generate generates Regexp - ASCII-8BIT with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq("\x04\x08", "I/", 3, "foo", "\x00", 1, ":", 4, "@foo", "i", 42),
+  );
+});
+
+Deno.test("generate generates Regexp - US-ASCII with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["/", 3, "foo", "\x00"],
+      2,
+      ...[":", 1, "E", "F"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp - UTF-8 with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["/", 3, "\xE3\x81\x82", "\x10"],
+      2,
+      ...[":", 1, "E", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp - other encoding with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["/", 2, "\x82\xA0", "\x10"],
+      2,
+      ...[":", 8, "encoding", '"', 11, "Windows-31J"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp - with custom class", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        className: "MyRegexp",
+      }),
+    ),
+    seq("\x04\x08", "C:", 8, "MyRegexp", "/", 3, "foo", "\x00"),
+  );
+});
+
+Deno.test("generate generates Regexp - with extenders", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      ...["/", 3, "foo", "\x00"],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp - with all", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        className: "MyRegexp",
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyRegexp"],
+      ...["/", 3, "foo", "\x00"],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - ASCII-8BIT simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x00"),
+  );
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "\xE3\x81\x82", "\x00"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - US-ASCII simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+        ruby18Compat: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x00"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - UTF-8 simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8, {
+        ruby18Compat: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "\xE3\x81\x82", "\x40"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - Windows-31J simple", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+        ruby18Compat: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 2, "\x82\xA0", "\x30"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with ignoreCase", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        ignoreCase: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x01"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with multiline", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        multiline: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x02"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with extended", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        extended: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x04"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with noEncoding", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        noEncoding: true,
+      }),
+    ),
+    seq("\x04\x08", "/", 3, "foo", "\x10"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with ivars", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      }),
+    ),
+    seq("\x04\x08", "I/", 3, "foo", "\x00", 1, ":", 4, "@foo", "i", 42),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with custom class", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        className: "MyRegexp",
+      }),
+    ),
+    seq("\x04\x08", "C:", 8, "MyRegexp", "/", 3, "foo", "\x00"),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with extenders", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      ...["/", 3, "foo", "\x00"],
+    ),
+  );
+});
+
+Deno.test("generate generates Regexp1.8 - with all", () => {
+  assertEquals(
+    generate(
+      MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+        ruby18Compat: true,
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        className: "MyRegexp",
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyRegexp"],
+      ...["/", 3, "foo", "\x00"],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1071,6 +1445,43 @@ Deno.test("generate generates links - unlinks Encoding names from other strings"
       2,
       ...['I"', 0, 1, ":", 8, "encoding", '"', 11, "Windows-31J"],
       ...['"', 11, "Windows-31J"],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Regexps", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["/", 0, "\x00"],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Regexps", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
+      MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["/", 0, "\x00"],
+      ...["/", 0, "\x00"],
     ),
   );
 });
