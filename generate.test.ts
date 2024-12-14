@@ -6,6 +6,7 @@ import {
   MarshalArray,
   MarshalBoolean,
   MarshalDump,
+  MarshalDumpBytes,
   MarshalFloat,
   MarshalHash,
   MarshalInteger,
@@ -1138,6 +1139,38 @@ Deno.test("generate generates Dump - simple case", () => {
   );
 });
 
+Deno.test("generate generates DumpBytes - ASCII-8BIT", () => {
+  assertEquals(
+    generate(
+      MarshalDumpBytes(
+        "BigDecimal",
+        new TextEncoder().encode("9:0.123e3"),
+        REncoding.ASCII_8BIT,
+      ),
+    ),
+    seq("\x04\x08", "u:", 10, "BigDecimal", 9, "9:0.123e3"),
+  );
+});
+
+Deno.test("generate generates DumpBytes - US-ASCII", () => {
+  assertEquals(
+    generate(
+      MarshalDumpBytes(
+        "Encoding",
+        new TextEncoder().encode("ISO-8859-1"),
+        REncoding.US_ASCII,
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "Iu:",
+      ...[8, "Encoding"],
+      ...[10, "ISO-8859-1"],
+      ...[1, ":", 1, "E", "F"],
+    ),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1536,6 +1569,55 @@ Deno.test("generate generates links - unlinks different Dumps", () => {
       2,
       ...["U:", 10, "OpenStruct", "{", 0],
       ...["U;", 0, "{", 0],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same DumpBytes", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalDumpBytes(
+            "BigDecimal",
+            new TextEncoder().encode("9:0.123e3"),
+            REncoding.ASCII_8BIT,
+          ),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["u:", 10, "BigDecimal", 9, "9:0.123e3"],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different DumpBytes", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalDumpBytes(
+        "BigDecimal",
+        new TextEncoder().encode("9:0.123e3"),
+        REncoding.ASCII_8BIT,
+      ),
+      MarshalDumpBytes(
+        "BigDecimal",
+        new TextEncoder().encode("9:0.123e3"),
+        REncoding.ASCII_8BIT,
+      ),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["u:", 10, "BigDecimal", 9, "9:0.123e3"],
+      ...["u;", 0, 9, "9:0.123e3"],
     ),
   );
 });

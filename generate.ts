@@ -472,9 +472,18 @@ class Generator {
     if (this.#tryWriteLink(value)) {
       return;
     }
-    this.#writeByte(TYPE_USERDEF);
-    this.#writeSymbolValue(value.className);
-    this.#writeBytes(value.dump);
+    if (value.encoding === REncoding.ASCII_8BIT) {
+      this.#writeByte(TYPE_USERDEF);
+      this.#writeSymbolValue(value.className);
+      this.#writeBytes(value.bytes);
+    } else {
+      this.#writeByte(TYPE_IVAR);
+      this.#writeByte(TYPE_USERDEF);
+      this.#writeSymbolValue(value.className);
+      this.#writeBytes(value.bytes);
+      this.#writeLong(1);
+      this.#writeEncodingPair(value.encoding);
+    }
   }
 
   #writeDumpData(value: MarshalDumpData) {

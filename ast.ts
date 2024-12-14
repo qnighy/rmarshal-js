@@ -367,13 +367,19 @@ export type MarshalDumpBytes = {
    * The bytes portion of the String returned by `Object#_dump`, or
    * the String argument of `klass._load`.
    */
-  dump: Uint8Array;
+  bytes: Uint8Array;
+  /**
+   * The encoding portion of the String returned by `Object#_dump`, or
+   * the String argument of `klass._load`.
+   */
+  encoding: REncoding;
 };
 export function MarshalDumpBytes(
   className: RSymbol,
-  dump: Uint8Array,
+  bytes: Uint8Array,
+  encoding: REncoding,
 ): MarshalDumpBytes {
-  return { type: "#_dump", className, dump };
+  return { type: "#_dump", className, bytes, encoding };
 }
 
 /**
