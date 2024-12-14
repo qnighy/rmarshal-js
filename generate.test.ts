@@ -5,6 +5,7 @@ import { seq } from "./testutil.ts";
 import {
   MarshalArray,
   MarshalBoolean,
+  MarshalDump,
   MarshalFloat,
   MarshalHash,
   MarshalInteger,
@@ -1121,6 +1122,22 @@ Deno.test("generate generates Regexp1.8 - with all", () => {
   );
 });
 
+Deno.test("generate generates Dump - simple case", () => {
+  assertEquals(
+    generate(MarshalDump("OpenStruct", MarshalHash([]))),
+    seq("\x04\x08", "U:", 10, "OpenStruct", "{", 0),
+  );
+  assertEquals(
+    generate(
+      MarshalDump(
+        "Complex",
+        MarshalArray([MarshalInteger(0n), MarshalInteger(1n)]),
+      ),
+    ),
+    seq("\x04\x08", "U:", 7, "Complex", "[", 2, "i", 0, "i", 1),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1482,6 +1499,43 @@ Deno.test("generate generates links - unlinks different Regexps", () => {
       2,
       ...["/", 0, "\x00"],
       ...["/", 0, "\x00"],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Dumps", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalDump("OpenStruct", MarshalHash([])),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["U:", 10, "OpenStruct", "{", 0],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Dumps", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalDump("OpenStruct", MarshalHash([])),
+      MarshalDump("OpenStruct", MarshalHash([])),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["U:", 10, "OpenStruct", "{", 0],
+      ...["U;", 0, "{", 0],
     ),
   );
 });
