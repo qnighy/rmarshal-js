@@ -11,6 +11,7 @@ import {
   MarshalFloat,
   MarshalHash,
   MarshalInteger,
+  MarshalModule,
   MarshalNil,
   MarshalObject,
   MarshalRegexp,
@@ -1205,6 +1206,27 @@ Deno.test("generate generates Struct - simple case", () => {
   );
 });
 
+Deno.test("generate generates Module - class simple case", () => {
+  assertEquals(
+    generate(MarshalModule("class", "File")),
+    seq("\x04\x08", "c", 4, "File"),
+  );
+});
+
+Deno.test("generate generates Module - module simple case", () => {
+  assertEquals(
+    generate(MarshalModule("module", "Math")),
+    seq("\x04\x08", "m", 4, "Math"),
+  );
+});
+
+Deno.test("generate generates Module - 1.6 compat case", () => {
+  assertEquals(
+    generate(MarshalModule("legacy", "File")),
+    seq("\x04\x08", "M", 4, "File"),
+  );
+});
+
 function setupLink<const T extends unknown[]>(
   values: T,
   callback: (...values: T) => void,
@@ -1771,6 +1793,48 @@ Deno.test("generate generates links - unlinks different Struct", () => {
         ...[";", 2, "0"],
         ...[";", 3, "F"],
       ],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Module", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [
+          MarshalArray([]),
+          MarshalModule("class", "File"),
+        ],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["c", 4, "File"],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Module", () => {
+  // It can happen in a rare case that different modules/classes of the same name
+  // are included in the same Marshal dump, for example before/after reloading
+  // via Zeitwerk.
+  // Although not useful in most cases, the "generate" utility preserves the
+  // original structure for uniformity.
+  assertEquals(
+    generate(MarshalArray([
+      MarshalModule("class", "File"),
+      MarshalModule("class", "File"),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["c", 4, "File"],
+      ...["c", 4, "File"],
     ),
   );
 });

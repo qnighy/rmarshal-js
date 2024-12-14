@@ -25,7 +25,7 @@ export const TYPE_USERDEF = 0x75; // 'u'
 export const TYPE_DATA = 0x64; // 'd'
 export const TYPE_STRUCT = 0x53; // 'S'
 export const TYPE_MODULE_OLD = 0x4D; // 'M'
-export const TYPE_CLASS = 0x43; // 'c'
+export const TYPE_CLASS = 0x63; // 'c'
 export const TYPE_MODULE = 0x6D; // 'm'
 export const TYPE_LINK = 0x40; // '@'
 
