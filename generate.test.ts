@@ -421,6 +421,51 @@ Deno.test("generate generates Array - with ivars", () => {
   );
 });
 
+Deno.test("generate generates Array - with custom class", () => {
+  assertEquals(
+    generate(MarshalArray([], { className: "MyArray" })),
+    seq("\x04\x08", "C:", 7, "MyArray", "[", 0),
+  );
+});
+
+Deno.test("generate generates Array - with extenders", () => {
+  assertEquals(
+    generate(MarshalArray([], { extenders: ["Mod1"] })),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      "[",
+      0,
+    ),
+  );
+});
+
+Deno.test("generate generates Array - with all", () => {
+  assertEquals(
+    generate(
+      MarshalArray([], {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        className: "MyArray",
+        extenders: ["Mod1"],
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 7, "MyArray"],
+      "[",
+      0,
+      1,
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ),
+  );
+});
+
 Deno.test("generate generates Hash - simple case", () => {
   assertEquals(generate(MarshalHash([])), seq("\x04\x08", "{", 0));
   assertEquals(
@@ -470,6 +515,69 @@ Deno.test("generate generates Hash - with default value and ivars", () => {
       }),
     ),
     seq("\x04\x08", "I}", 1, "0", "0", "i", 42, 1, ":", 4, "@foo", "i", 42),
+  );
+});
+
+Deno.test("generate generates Hash - with ruby2_keywords", () => {
+  assertEquals(
+    generate(MarshalHash([], { ruby2Keywords: true })),
+    seq("\x04\x08", "I{", 0, 1, ":", 1, "K", "T"),
+  );
+});
+
+Deno.test("generate generates Hash - with ivars and ruby2_keywords", () => {
+  assertEquals(
+    generate(
+      MarshalHash([], {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        ruby2Keywords: true,
+      }),
+    ),
+    seq("\x04\x08", "I{", 0, 2, ":", 1, "K", "T", ":", 4, "@foo", "i", 42),
+  );
+});
+
+Deno.test("generate generates Hash - with custom class", () => {
+  assertEquals(
+    generate(MarshalHash([], { className: "MyHash" })),
+    seq("\x04\x08", "C:", 6, "MyHash", "{", 0),
+  );
+});
+
+Deno.test("generate generates Hash - with extenders", () => {
+  assertEquals(
+    generate(MarshalHash([], { extenders: ["Mod1"] })),
+    seq(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      "{",
+      0,
+    ),
+  );
+});
+
+Deno.test("generate generates Hash - with all", () => {
+  assertEquals(
+    generate(
+      MarshalHash([], {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
+        className: "MyHash",
+        extenders: ["Mod1"],
+        defaultValue: MarshalInteger(42n),
+        ruby2Keywords: true,
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 6, "MyHash"],
+      ...["}", 0],
+      ...["i", 42],
+      2,
+      ...[":", 1, "K", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
   );
 });
 
@@ -731,6 +839,74 @@ Deno.test("generate generates links - unlinks different Objects", () => {
       2,
       ...["o:", 7, "MyClass", 0],
       ...["o;", 0, 0],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Arrays", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [MarshalArray([]), MarshalArray([])],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["[", 0],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Arrays", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalArray([]),
+      MarshalArray([]),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["[", 0],
+      ...["[", 0],
+    ),
+  );
+});
+
+Deno.test("generate generates links - links same Hashes", () => {
+  assertEquals(
+    generate(
+      setupLink(
+        [MarshalArray([]), MarshalHash([])],
+        (a, b) => a.elements.push(b, b),
+      ),
+    ),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["{", 0],
+      ...["@", 1],
+    ),
+  );
+});
+
+Deno.test("generate generates links - unlinks different Hashes", () => {
+  assertEquals(
+    generate(MarshalArray([
+      MarshalHash([]),
+      MarshalHash([]),
+    ])),
+    seq(
+      "\x04\x08",
+      "[",
+      2,
+      ...["{", 0],
+      ...["{", 0],
     ),
   );
 });
