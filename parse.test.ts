@@ -3,6 +3,7 @@ import {
   MarshalArray,
   MarshalBoolean,
   MarshalFloat,
+  MarshalHash,
   MarshalInteger,
   MarshalNil,
   MarshalObject,
@@ -1130,6 +1131,147 @@ Deno.test("parse parses Array - with all", () => {
       ivars: new Map([["@foo", MarshalInteger(42n)]]),
       className: "MyArray",
       extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses Hash - simple case", () => {
+  assertEquals(p("\x04\x08", "{", 0), MarshalHash([]));
+  assertEquals(
+    p("\x04\x08", "{", 2, "i", 42, "0", "i", 100, "F"),
+    MarshalHash([
+      [MarshalInteger(42n), MarshalNil()],
+      [MarshalInteger(100n), MarshalBoolean(false)],
+    ]),
+  );
+});
+
+Deno.test("parse parses Hash - with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I{",
+      1,
+      "0",
+      "0",
+      1,
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ),
+    MarshalHash([[MarshalNil(), MarshalNil()]], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses Hash - with default value", () => {
+  assertEquals(
+    p("\x04\x08", "}", 0, "i", 42),
+    MarshalHash([], { defaultValue: MarshalInteger(42n) }),
+  );
+  assertEquals(
+    p("\x04\x08", "}", 2, "i", 42, "0", "i", 100, "F", "i", 42),
+    MarshalHash(
+      [
+        [MarshalInteger(42n), MarshalNil()],
+        [MarshalInteger(100n), MarshalBoolean(false)],
+      ],
+      { defaultValue: MarshalInteger(42n) },
+    ),
+  );
+});
+
+Deno.test("parse parses Hash - with default value and ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I}",
+      1,
+      "0",
+      "0",
+      "i",
+      42,
+      1,
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ),
+    MarshalHash([[MarshalNil(), MarshalNil()]], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      defaultValue: MarshalInteger(42n),
+    }),
+  );
+});
+
+Deno.test("parse parses Hash - with ruby2_keywords", () => {
+  assertEquals(
+    p("\x04\x08", "I{", 0, 1, ":", 1, "K", "T"),
+    MarshalHash([], { ruby2Keywords: true }),
+  );
+});
+
+Deno.test("parse parses Hash - with ivars and ruby2_keywords", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I{",
+      0,
+      2,
+      ":",
+      1,
+      "K",
+      "T",
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ),
+    MarshalHash([], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      ruby2Keywords: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Hash - with custom class", () => {
+  assertEquals(
+    p("\x04\x08", "C:", 6, "MyHash", "{", 0),
+    MarshalHash([], { className: "MyHash" }),
+  );
+});
+
+Deno.test("parse parses Hash - with extenders", () => {
+  assertEquals(
+    p("\x04\x08", ...["e:", 4, "Mod1"], "{", 0),
+    MarshalHash([], { extenders: ["Mod1"] }),
+  );
+});
+
+Deno.test("parse parses Hash - with all", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 6, "MyHash"],
+      ...["}", 0],
+      ...["i", 42],
+      2,
+      ...[":", 1, "K", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalHash([], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyHash",
+      extenders: ["Mod1"],
+      defaultValue: MarshalInteger(42n),
+      ruby2Keywords: true,
     }),
   );
 });
