@@ -1022,3 +1022,59 @@ Deno.test("parse rejects non-Symbols in Symbol context", () => {
     "Unknown type 0x7E '~' cannot be a Symbol",
   );
 });
+
+Deno.test("parse parses Object - simple case", () => {
+  assertEquals(
+    p("\x04\x08", "o:", 6, "Object", 0),
+    MarshalObject("Object", new Map()),
+  );
+  assertEquals(
+    p("\x04\x08", "o:", 7, "MyClass", 0),
+    MarshalObject("MyClass", new Map()),
+  );
+});
+
+Deno.test("parse parses Object - with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "o",
+      ...[":", 7, "MyClass"],
+      2,
+      ...[":", 4, "@foo", "i", 42],
+      ...[":", 4, "@bar", ":", 3, "baz"],
+    ),
+    MarshalObject(
+      "MyClass",
+      new Map<RSymbol, MarshalValue>([
+        ["@foo", MarshalInteger(42n)],
+        ["@bar", MarshalSymbol("baz")],
+      ]),
+    ),
+  );
+});
+
+Deno.test("parse rejects Object with duplicate ivar", () => {
+  assertThrows(
+    () => p("\x04\x08", "o:", 6, "Object", 2, ":", 4, "@foo", "0", ";", 1, "0"),
+    SyntaxError,
+    "Duplicate instance variable",
+  );
+});
+
+Deno.test("parse parses Object - with extenders", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      ...["e:", 4, "Mod1"],
+      ...["eI:", 4, "M\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      "o:",
+      7,
+      "MyClass",
+      0,
+    ),
+    MarshalObject("MyClass", new Map(), {
+      extenders: ["Mod1", "Mあ"],
+    }),
+  );
+});
