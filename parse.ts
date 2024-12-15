@@ -7,6 +7,8 @@ import {
 import {
   MARSHAL_MAJOR,
   MARSHAL_MINOR,
+  SIGN_NEGATIVE,
+  SIGN_POSITIVE,
   TYPE_ARRAY,
   TYPE_BIGNUM,
   TYPE_CLASS,
@@ -93,7 +95,7 @@ export class Parser {
       case TYPE_FIXNUM:
         return this.#readFixnumBody();
       case TYPE_BIGNUM:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readBignumBody();
       case TYPE_FLOAT:
         throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
       case TYPE_SYMBOL:
@@ -145,6 +147,41 @@ export class Parser {
       throw new SyntaxError("Integer too large for 31bit");
     }
     return MarshalInteger(BigInt(num));
+  }
+
+  #readBignumBody(): MarshalInteger {
+    const signByte = this.#readByte();
+    if (signByte !== SIGN_POSITIVE && signByte !== SIGN_NEGATIVE) {
+      throw new SyntaxError("Invalid Bignum sign byte");
+    }
+    const numWords = this.#readIndex();
+    let value = 0n;
+    for (let i = 0; i < numWords * 2; i++) {
+      value |= BigInt(this.#readByte()) << (BigInt(i) * 8n);
+    }
+    if (signByte !== SIGN_NEGATIVE) {
+      if (numWords <= 2 && value < 0x40000000n) {
+        throw new SyntaxError("Incorrect Fixnum representation as Bignum");
+      } else if (value < (1n << (BigInt(numWords - 1) * 16n))) {
+        throw new SyntaxError("Non-canonical Bignum representation");
+      }
+    } else {
+      value = -value;
+      if (numWords <= 2 && value >= -0x40000000n) {
+        throw new SyntaxError("Incorrect Fixnum representation as Bignum");
+      } else if (value > -(1n << (BigInt(numWords - 1) * 16n))) {
+        throw new SyntaxError("Non-canonical Bignum representation");
+      }
+    }
+    return MarshalInteger(value);
+  }
+
+  #readIndex(): number {
+    const num = this.#readLong();
+    if (num < 0) {
+      throw new SyntaxError("Negative index or length");
+    }
+    return num;
   }
 
   #readLong(): number {

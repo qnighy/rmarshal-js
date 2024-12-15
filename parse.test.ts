@@ -284,3 +284,157 @@ Deno.test("parse rejects Fixnum too large for 31bit negative", () => {
     "Integer too large for 32bit",
   );
 });
+
+Deno.test("parse rejects Bignum with invalid sign", () => {
+  assertThrows(
+    () => p("\x04\x08", "l.", 2, "\x00\x00\x00\x40"),
+    SyntaxError,
+    "Invalid Bignum sign byte",
+  );
+});
+
+Deno.test("parse rejects Bignum with negative length", () => {
+  assertThrows(
+    () => p("\x04\x08", "l+\xFA"),
+    SyntaxError,
+    "Negative index or length",
+  );
+});
+
+Deno.test("parse rejects Bignum in non-canonical positive 0-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l+", 0),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse rejects Bignum in non-canonical negative 0-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l-", 0),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse rejects Bignum in non-canonical positive 1-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l+", 1, "\x00\x00"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l+", 1, "\xFF\xFF"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse rejects Bignum in non-canonical negative 1-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l-", 1, "\x00\x00"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l-", 1, "\xFF\xFF"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse parses Bignum - positive 2-word form", () => {
+  assertEquals(
+    p("\x04\x08", "l+", 2, "\x00\x00\x00\x40"),
+    MarshalInteger(1073741824n),
+  );
+  assertEquals(
+    p("\x04\x08", "l+", 2, "\xFF\xFF\xFF\xFF"),
+    MarshalInteger(4294967295n),
+  );
+});
+
+Deno.test("parse rejects Bignum non-canonical positive 2-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l+", 2, "\x00\x00\x00\x00"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l+", 2, "\xFF\xFF\xFF\x3F"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse parses Bignum - negative 2-word form", () => {
+  assertEquals(
+    p("\x04\x08", "l-", 2, "\x01\x00\x00\x40"),
+    MarshalInteger(-1073741825n),
+  );
+  assertEquals(
+    p("\x04\x08", "l-", 2, "\xFF\xFF\xFF\xFF"),
+    MarshalInteger(-4294967295n),
+  );
+});
+
+Deno.test("parse rejects Bignum non-canonical negative 2-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l-", 2, "\x00\x00\x00\x00"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l-", 2, "\x00\x00\x00\x40"),
+    SyntaxError,
+    "Incorrect Fixnum representation as Bignum",
+  );
+});
+
+Deno.test("parse parses Bignum - positive 3-word form", () => {
+  assertEquals(
+    p("\x04\x08", "l+", 3, "\x00\x00\x00\x00\x01\x00"),
+    MarshalInteger(4294967296n),
+  );
+  assertEquals(
+    p("\x04\x08", "l+", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
+    MarshalInteger(281474976710655n),
+  );
+});
+
+Deno.test("parse rejects Bignum redundant positive 3-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l+", 3, "\x00\x00\x00\x00\x00\x00"),
+    SyntaxError,
+    "Non-canonical Bignum representation",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l+", 3, "\xFF\xFF\xFF\xFF\x00\x00"),
+    SyntaxError,
+    "Non-canonical Bignum representation",
+  );
+});
+
+Deno.test("parse parses Bignum - negative 3-word form", () => {
+  assertEquals(
+    p("\x04\x08", "l-", 3, "\x00\x00\x00\x00\x01\x00"),
+    MarshalInteger(-4294967296n),
+  );
+  assertEquals(
+    p("\x04\x08", "l-", 3, "\xFF\xFF\xFF\xFF\xFF\xFF"),
+    MarshalInteger(-281474976710655n),
+  );
+});
+
+Deno.test("parse rejects Bignum redundant negative 3-word form", () => {
+  assertThrows(
+    () => p("\x04\x08", "l-", 3, "\x00\x00\x00\x00\x00\x00"),
+    SyntaxError,
+    "Non-canonical Bignum representation",
+  );
+  assertThrows(
+    () => p("\x04\x08", "l-", 3, "\xFF\xFF\xFF\xFF\x00\x00"),
+    SyntaxError,
+    "Non-canonical Bignum representation",
+  );
+});
