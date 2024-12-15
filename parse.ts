@@ -163,7 +163,7 @@ export class Parser {
       case TYPE_IVAR:
         return this.#readIvarBodyAsSymbol();
       default:
-        throw new SyntaxError(`${describeByte(type)} cannot be a Symbol`);
+        throw new SyntaxError(`${describeType(type)} cannot be a Symbol`);
     }
   }
 
@@ -242,7 +242,7 @@ export class Parser {
           return this.#readRegexpBody(hasIvar, extenders, undefined);
         default:
           throw new SyntaxError(
-            `${describeByte(type)} cannot include extenders`,
+            `${describeType(type)} cannot include extenders`,
           );
       }
     }
@@ -273,7 +273,7 @@ export class Parser {
       default:
         throw new SyntaxError(
           `${
-            describeByte(type)
+            describeType(type)
           } cannot be a subclass of Array/Hash/String/Regexp`,
         );
     }

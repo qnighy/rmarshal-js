@@ -1,9 +1,11 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 import {
+  MarshalArray,
   MarshalBoolean,
   MarshalFloat,
   MarshalInteger,
   MarshalNil,
+  MarshalObject,
   MarshalSymbol,
   type MarshalValue,
 } from "./ast.ts";
@@ -757,5 +759,266 @@ Deno.test("parse rejects Symbol with invalid E value", () => {
     () => p("\x04\x08", "I:", 3, "foo", 1, ":", 1, "E", "i", 0),
     SyntaxError,
     "Invalid short encoding specifier",
+  );
+});
+
+Deno.test("parse rejects Symbol which is unlinked duplicate", () => {
+  assertThrows(
+    () => p("\x04\x08", "[", 2, ":", 3, "foo", ":", 3, "foo"),
+    SyntaxError,
+    "Same symbol appeared twice",
+  );
+});
+
+Deno.test("parse parses Symbol link - simple case", () => {
+  assertEquals(
+    p("\x04\x08", "[", 2, ":", 3, "foo", ";", 0),
+    MarshalArray([MarshalSymbol("foo"), MarshalSymbol("foo")]),
+  );
+});
+
+Deno.test("parse rejects Symbol link with negative index", () => {
+  assertThrows(
+    () => p("\x04\x08", ";\xFA"),
+    SyntaxError,
+    "Negative index or length",
+  );
+});
+
+Deno.test("parse rejects Symbol link with unassigned index", () => {
+  assertThrows(
+    () => p("\x04\x08", ";", 0),
+    SyntaxError,
+    "Invalid symbol link",
+  );
+});
+
+Deno.test("parse parses Symbol link - multiple links", () => {
+  assertEquals(
+    p("\x04\x08", "[", 4, ":", 3, "foo", ":", 3, "bar", ";", 1, ";", 0),
+    MarshalArray([
+      MarshalSymbol("foo"),
+      MarshalSymbol("bar"),
+      MarshalSymbol("bar"),
+      MarshalSymbol("foo"),
+    ]),
+  );
+});
+
+Deno.test("parse parses Symbol link - symbols within symbols", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "[",
+      3,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...[";", 0],
+      ...[";", 1],
+    ),
+    MarshalArray([
+      MarshalSymbol("あ"),
+      MarshalSymbol("あ"),
+      MarshalSymbol("E"),
+    ]),
+  );
+});
+
+Deno.test("parse parses Symbol link - symbols with same encoding", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "[",
+      2,
+      ...["I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"],
+      ...["I:", 3, "\xE3\x81\x84", 1, ";", 1, "T"],
+    ),
+    MarshalArray([MarshalSymbol("あ"), MarshalSymbol("い")]),
+  );
+});
+
+Deno.test("parse rejects circular Symbol link", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 1, ";", 0),
+    SyntaxError,
+    "Circular symbol link",
+  );
+});
+
+Deno.test("parse parses Symbol in Symbol context - simple case", () => {
+  assertEquals(
+    p("\x04\x08", "o:", 6, "Object", 0),
+    MarshalObject("Object", new Map()),
+  );
+});
+
+Deno.test("parse parses Symbol in Symbol context - UTF-8", () => {
+  assertEquals(
+    p("\x04\x08", "oI:", 4, "A\xE3\x81\x82", 1, ":", 1, "E", "T", 0),
+    MarshalObject("Aあ", new Map()),
+  );
+});
+
+Deno.test("parse rejects nested ivar container in Symbol context", () => {
+  assertThrows(
+    () =>
+      p(
+        "\x04\x08",
+        "oII:",
+        4,
+        "A\xE3\x81\x82",
+        ...[1, ":", 1, "E", "T"],
+        ...[1, ";", 1, "T"],
+        0,
+      ),
+    SyntaxError,
+    "Nested instance variable container",
+  );
+});
+
+Deno.test("parse rejects non-Symbols in Symbol context", () => {
+  assertThrows(
+    () => p("\x04\x08", "o0", 0),
+    SyntaxError,
+    "nil cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oT", 0),
+    SyntaxError,
+    "true cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oF", 0),
+    SyntaxError,
+    "false cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oi", 0, 0),
+    SyntaxError,
+    "Integer (Fixnum) cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "ol+", 2, "\x00\x00\x00\x40", 0),
+    SyntaxError,
+    "Integer (Bignum) cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "of", 1, "1", 0),
+    SyntaxError,
+    "Float cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oe:", 8, "MyModule", ":", 6, "Object", 0),
+    SyntaxError,
+    "singleton extension cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oC:", 8, "MySymbol", ":", 6, "Object", 0),
+    SyntaxError,
+    "subclass of Array/Hash/String/Regexp cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oo:", 6, "Object", 0, 0),
+    SyntaxError,
+    "Object cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o[", 0, 0),
+    SyntaxError,
+    "Array cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oI[", 0, 1, ":", 4, "@foo", "0", 0),
+    SyntaxError,
+    "Array cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o{", 0, 0),
+    SyntaxError,
+    "Hash cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o}", 0, "F", 0),
+    SyntaxError,
+    "Hash with default value cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oI{", 0, 1, ":", 4, "@foo", "0", 0),
+    SyntaxError,
+    "Hash cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oI}", 0, "F", 1, ":", 4, "@foo", "0", 0),
+    SyntaxError,
+    "Hash with default value cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", 'o"', 0, 0),
+    SyntaxError,
+    "String cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", 'oI"', 0, 1, ":", 4, "@foo", "0", 0),
+    SyntaxError,
+    "String cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o/", 0, 0x30, 0),
+    SyntaxError,
+    "Regexp cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oI/", 0, 0x30, ":", 4, "@foo", "0", 0),
+    SyntaxError,
+    "Regexp cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oU:", 8, "MyObject", "0", 0),
+    SyntaxError,
+    "#marshal_dump cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "ou:", 8, "MyObject", 0, 0),
+    SyntaxError,
+    "#_dump cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "od:", 8, "MyObject", "0", 0),
+    SyntaxError,
+    "#_dump_data cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oS:", 8, "MyStruct", 0, 0),
+    SyntaxError,
+    "Struct or Data cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oc", 7, "MyClass", 0),
+    SyntaxError,
+    "Class cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "om", 8, "MyModule", 0),
+    SyntaxError,
+    "Module cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "oM", 8, "MyModule", 0),
+    SyntaxError,
+    "Class or Module cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o@", 0, 0),
+    SyntaxError,
+    "Object link cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o\x0F"),
+    SyntaxError,
+    "Unknown type 0x0F cannot be a Symbol",
+  );
+  assertThrows(
+    () => p("\x04\x08", "o\x7E"),
+    SyntaxError,
+    "Unknown type 0x7E '~' cannot be a Symbol",
   );
 });
