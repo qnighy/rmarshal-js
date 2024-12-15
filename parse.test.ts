@@ -738,10 +738,9 @@ Deno.test("parse rejects Symbol with explicit zero ivars", () => {
 
 Deno.test("parse rejects Symbol with many ivars", () => {
   assertThrows(
-    () =>
-      p("\x04\x08", "I:", 3, "foo", 2, ":", 1, "E", "T", 1, ":", 1, "K", "T"),
+    () => p("\x04\x08", "I:", 3, "foo", 2, ":", 1, "E", "T", ":", 1, "K", "T"),
     SyntaxError,
-    "Too many ivars for Symbol",
+    "Extra ivars for Symbol",
   );
 });
 
