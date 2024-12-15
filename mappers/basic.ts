@@ -3,12 +3,33 @@ import type { Mapper } from "../mapper.ts";
 
 /**
  * Maps the Ruby `nil` to the JS `null`.
+ *
+ * When dumping, `undefined` and `null` are treated uniformly.
  */
 export const NullMapper: Mapper<null> = {
     classNames: ["NilClass"],
     load(value: MarshalValue): { value: null } | undefined {
         if (value.type === "NilClass") {
             return { value: null };
+        }
+    },
+    dump(value: unknown): MarshalValue | undefined {
+        if (value == null) {
+            return MarshalNil();
+        }
+    },
+};
+
+/**
+ * Maps the Ruby `nil` to the JS `undefined`.
+ *
+ * When dumping, `undefined` and `null` are treated uniformly.
+ */
+export const UndefinedMapper: Mapper<undefined> = {
+    classNames: ["NilClass"],
+    load(value: MarshalValue): { value: undefined } | undefined {
+        if (value.type === "NilClass") {
+            return { value: undefined };
         }
     },
     dump(value: unknown): MarshalValue | undefined {
