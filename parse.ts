@@ -3,6 +3,7 @@ import {
   MarshalFloat,
   MarshalInteger,
   MarshalNil,
+  MarshalSymbol,
   MarshalValue,
 } from "./ast.ts";
 import {
@@ -36,6 +37,7 @@ import {
   TYPE_USERDEF,
   TYPE_USRMARSHAL,
 } from "./marshal-common.ts";
+import { REncoding, RSymbol } from "./rom.ts";
 
 export function parse(buf: Uint8Array): MarshalValue {
   const parser = new Parser(buf);
@@ -60,6 +62,8 @@ export function parseNext(buf: Uint8Array): [MarshalValue, Uint8Array] {
 export class Parser {
   #buf: Uint8Array;
   #pos = 0;
+  #symbols!: (RSymbol | undefined)[];
+  #visitedSymbols!: Set<RSymbol>;
 
   constructor(buf: Uint8Array) {
     this.#buf = buf;
@@ -74,6 +78,8 @@ export class Parser {
   }
 
   readTopLevel(): MarshalValue {
+    this.#symbols = [];
+    this.#visitedSymbols = new Set();
     const major = this.#readByte();
     const minor = this.#readByte();
     if (major !== MARSHAL_MAJOR || minor > MARSHAL_MINOR) {
@@ -100,11 +106,11 @@ export class Parser {
       case TYPE_FLOAT:
         return this.#readFloatBody();
       case TYPE_SYMBOL:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readSymbolBody(false);
       case TYPE_SYMLINK:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readSymbolLinkBody();
       case TYPE_IVAR:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readIvarBody();
       case TYPE_EXTENDED:
         throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
       case TYPE_UCLASS:
@@ -139,6 +145,67 @@ export class Parser {
         throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
       default:
         throw new SyntaxError(`Unknown type: ${describeByte(type)}`);
+    }
+  }
+
+  #readSymbol(): MarshalSymbol {
+    const type = this.#readByte();
+    switch (type) {
+      case TYPE_SYMBOL:
+        return this.#readSymbolBody(false);
+      case TYPE_SYMLINK:
+        return this.#readSymbolLinkBody();
+      case TYPE_IVAR:
+        return this.#readIvarBodyAsSymbol();
+      default:
+        throw new SyntaxError(`${describeByte(type)} cannot be a Symbol`);
+    }
+  }
+
+  #readIvarBody(): MarshalValue {
+    const type = this.#readByte();
+    switch (type) {
+      case TYPE_SYMBOL:
+        return this.#readSymbolBody(true);
+      case TYPE_IVAR:
+        throw new SyntaxError("Nested instance variable container");
+      case TYPE_ARRAY:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      case TYPE_HASH:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      case TYPE_HASH_DEF:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      case TYPE_STRING:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      case TYPE_REGEXP:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      case TYPE_USERDEF:
+        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+      default:
+        throw new SyntaxError(
+          `${describeType(type)} cannot include instance variables`,
+        );
+    }
+  }
+
+  #readIvarBodyAsSymbol(): MarshalSymbol {
+    const type = this.#readByte();
+    switch (type) {
+      case TYPE_SYMBOL:
+        return this.#readSymbolBody(true);
+      case TYPE_IVAR:
+        throw new SyntaxError("Nested instance variable container");
+      case TYPE_ARRAY:
+      case TYPE_HASH:
+      case TYPE_HASH_DEF:
+      case TYPE_STRING:
+      case TYPE_REGEXP:
+      case TYPE_USERDEF:
+        throw new SyntaxError(`${describeType(type)} cannot be a Symbol`);
+      default:
+        throw new SyntaxError(
+          `${describeType(type)} cannot include instance variables`,
+        );
     }
   }
 
@@ -213,6 +280,73 @@ export class Parser {
       return MarshalFloat(Number(text));
     } else {
       throw new SyntaxError("Invalid Float format");
+    }
+  }
+
+  #readSymbolBody(hasIvar: boolean): MarshalSymbol {
+    const symbolId = this.#symbols.length;
+    this.#symbols.push(undefined);
+
+    const sym = this.#readSymbolBodyImpl(hasIvar);
+    this.#symbols[symbolId] = sym;
+    if (this.#visitedSymbols.has(sym)) {
+      throw new SyntaxError("Same symbol appeared twice");
+    }
+    this.#visitedSymbols.add(sym);
+    return MarshalSymbol(sym);
+  }
+
+  #readSymbolBodyImpl(hasIvar: boolean): RSymbol {
+    const bytes = this.#readByteSlice();
+    if (!hasIvar) {
+      return RSymbol(bytes, REncoding.ASCII_8BIT);
+    }
+    const numIvars = this.#readIndex();
+    if (numIvars === 0) {
+      throw new SyntaxError("Redundant ivar container with no ivars");
+    } else if (numIvars > 1) {
+      throw new SyntaxError("Too many ivars for Symbol");
+    }
+    const key = this.#readSymbol().value;
+    const value = this.#readValue();
+    const encoding = this.#interpretEncoding(key, value);
+    if (encoding === REncoding.US_ASCII) {
+      throw new SyntaxError("Invalid explicit encoding: US-ASCII");
+    }
+    const sym = RSymbol(bytes, encoding);
+    if (RSymbol.encodingOf(sym) !== encoding) {
+      throw new SyntaxError("Redundant encoding specifier in ASCII Symbol");
+    }
+    return sym;
+  }
+
+  #readSymbolLinkBody(): MarshalSymbol {
+    const symbolId = this.#readIndex();
+    if (symbolId >= this.#symbols.length) {
+      throw new SyntaxError("Invalid symbol link");
+    }
+    const sym = this.#symbols[symbolId];
+    if (sym == null) {
+      throw new SyntaxError("Circular symbol link");
+    }
+    return MarshalSymbol(sym);
+  }
+
+  #isEncodingKey(key: RSymbol): boolean {
+    return key === "E" || key === "encoding";
+  }
+
+  #interpretEncoding(key: RSymbol, value: MarshalValue): REncoding {
+    if (key === "E") {
+      if (value.type === "Boolean") {
+        return value.value ? REncoding.UTF_8 : REncoding.US_ASCII;
+      } else {
+        throw new SyntaxError("Invalid short encoding specifier");
+      }
+    } else if (key === "encoding") {
+      throw Error("TODO: Symbol with encoding");
+    } else {
+      throw new SyntaxError("Not an encoding ivar");
     }
   }
 

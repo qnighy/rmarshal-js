@@ -4,10 +4,12 @@ import {
   MarshalFloat,
   MarshalInteger,
   MarshalNil,
+  MarshalSymbol,
   type MarshalValue,
 } from "./ast.ts";
 import { parse } from "./parse.ts";
 import { seq, type SeqElement } from "./testutil.ts";
+import { REncoding, RSymbol } from "./rom.ts";
 
 function p(...elems: SeqElement[]): MarshalValue {
   return parse(seq(...elems));
@@ -646,4 +648,115 @@ Deno.test("parse parses Float scientific fractions", () => {
   );
   assertEquals(p("\x04\x08", "f", 6, "5e-324"), MarshalFloat(5e-324));
   assertEquals(p("\x04\x08", "f", 7, "-5e-324"), MarshalFloat(-5e-324));
+});
+
+Deno.test("parse parses Symbol - US-ASCII", () => {
+  // assertEquals(generate(MarshalSymbol("foo")), seq("\x04\x08", ":", 3, "foo"));
+  assertEquals(p("\x04\x08", ":", 3, "foo"), MarshalSymbol("foo"));
+});
+
+Deno.test("parse parses Symbol - ASCII-8BIT", () => {
+  // assertEquals(
+  //   generate(
+  //     MarshalSymbol(
+  //       RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
+  //     ),
+  //   ),
+  //   seq("\x04\x08", ":", 3, "\xE3\x81\x82"),
+  // );
+  assertEquals(
+    p("\x04\x08", ":", 3, "\xE3\x81\x82"),
+    MarshalSymbol(
+      RSymbol(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
+    ),
+  );
+});
+
+Deno.test("parse parses Symbol - UTF-8", () => {
+  // assertEquals(
+  //   generate(MarshalSymbol("あ")),
+  //   seq("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
+  // );
+  assertEquals(
+    p("\x04\x08", "I:", 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
+    MarshalSymbol("あ"),
+  );
+});
+
+// Deno.test("parse parses Symbol - other encoding", () => {
+//   assertEquals(
+//     p(
+//       "\x04\x08",
+//       "I:",
+//       2,
+//       "\x82\xA0",
+//       1,
+//       ":",
+//       8,
+//       "encoding",
+//       '"',
+//       11,
+//       "Windows-31J",
+//     ),
+//     MarshalSymbol(
+//       RSymbol(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J),
+//     ),
+//   );
+// });
+
+Deno.test("parse rejects Symbol with incorrectly-encoded contents", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "\xE3\x81\x72", 1, ":", 1, "E", "T"),
+    TypeError,
+    "Got an invalid byte sequence as a symbol source",
+  );
+});
+
+Deno.test("parse rejects Symbol with explicit US-ASCII specification", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 1, ":", 1, "E", "F"),
+    SyntaxError,
+    "Invalid explicit encoding: US-ASCII",
+  );
+});
+
+Deno.test("parse rejects Symbol with ASCII-only contents and explicit encoding", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 1, ":", 1, "E", "T"),
+    SyntaxError,
+    "Redundant encoding specifier in ASCII Symbol",
+  );
+});
+
+Deno.test("parse rejects Symbol with explicit zero ivars", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 0),
+    SyntaxError,
+    "Redundant ivar container with no ivars",
+  );
+});
+
+Deno.test("parse rejects Symbol with many ivars", () => {
+  assertThrows(
+    () =>
+      p("\x04\x08", "I:", 3, "foo", 2, ":", 1, "E", "T", 1, ":", 1, "K", "T"),
+    SyntaxError,
+    "Too many ivars for Symbol",
+  );
+});
+
+Deno.test("parse rejects Symbol with non-encoding ivar", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 1, ":", 1, "K", "T"),
+    SyntaxError,
+    "Not an encoding ivar",
+  );
+});
+
+Deno.test("parse rejects Symbol with invalid E value", () => {
+  assertThrows(
+    () => p("\x04\x08", "I:", 3, "foo", 1, ":", 1, "E", "i", 0),
+    SyntaxError,
+    "Invalid short encoding specifier",
+  );
 });
