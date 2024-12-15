@@ -7,6 +7,7 @@ import {
   MarshalInteger,
   MarshalNil,
   MarshalObject,
+  MarshalRegexp,
   MarshalString,
   MarshalSymbol,
   type MarshalValue,
@@ -1410,6 +1411,324 @@ Deno.test("parse parses String - with all", () => {
     MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
       ivars: new Map([["@foo", MarshalInteger(42n)]]),
       className: "MyString",
+      extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - ASCII-8BIT simple", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "\xE3\x81\x82", "\x10"),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
+  );
+});
+
+Deno.test("parse parses Regexp - US-ASCII simple", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x00", 1, ":", 1, "E", "F"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII),
+  );
+});
+
+Deno.test("parse parses Regexp - UTF-8 simple", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "\xE3\x81\x82", "\x10", 1, ":", 1, "E", "T"),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8),
+  );
+});
+
+// Deno.test("parse parses Regexp - other encoding simple", () => {
+//   assertEquals(
+//     p(
+//       "\x04\x08",
+//       "I/",
+//       2,
+//       "\x82\xA0",
+//       "\x10",
+//       1,
+//       ":",
+//       8,
+//       "encoding",
+//       '"',
+//       11,
+//       "Windows-31J",
+//     ),
+//     MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J),
+//   );
+// });
+
+Deno.test("parse parses Regexp - with ignoreCase", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x01", 1, ":", 1, "E", "F"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ignoreCase: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - with multiline", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x02", 1, ":", 1, "E", "F"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      multiline: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - with extended", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x04", 1, ":", 1, "E", "F"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      extended: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - with noEncoding", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x20", 1, ":", 1, "E", "F"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      noEncoding: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - ASCII-8BIT with ivars", () => {
+  assertEquals(
+    p("\x04\x08", "I", ...["/", 3, "\xE3\x81\x82", "\x30"], ...[
+      1,
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ]),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT, {
+      noEncoding: true,
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - US-ASCII with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["/", 3, "foo", "\x00"],
+      2,
+      ...[":", 1, "E", "F"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - UTF-8 with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["/", 3, "\xE3\x81\x82", "\x10"],
+      2,
+      ...[":", 1, "E", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+// Deno.test("parse parses Regexp - other encoding with ivars", () => {
+//   assertEquals(
+//     p(
+//       "\x04\x08",
+//       "I",
+//       ...["/", 2, "\x82\xA0", "\x10"],
+//       2,
+//       ...[":", 8, "encoding", '"', 11, "Windows-31J"],
+//       ...[":", 4, "@foo", "i", 42],
+//     ),
+//     MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+//       ivars: new Map([["@foo", MarshalInteger(42n)]]),
+//     }),
+//   );
+// });
+
+Deno.test("parse parses Regexp - with custom class", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      ...["IC:", 8, "MyRegexp"],
+      ...["/", 3, "foo", "\x00"],
+      ...[1, ":", 1, "E", "F"],
+    ),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      className: "MyRegexp",
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - with extenders", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      ...["Ie:", 4, "Mod1"],
+      ...["/", 3, "foo", "\x00"],
+      ...[1, ":", 1, "E", "F"],
+    ),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp - with all", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyRegexp"],
+      ...["/", 3, "foo", "\x00"],
+      2,
+      ...[":", 1, "E", "F"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyRegexp",
+      extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - $KCODE simple", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "\xE3\x81\x82", "\x00"),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT, {
+      ruby18Compat: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - US-ASCII simple", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "foo", "\x00"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - UTF-8 simple", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "\xE3\x81\x82", "\x40"),
+    MarshalRegexp(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8, {
+      ruby18Compat: true,
+    }),
+  );
+});
+
+// // Ambiguous
+// Deno.test("parse parses Regexp1.8 - Windows-31J simple", () => {
+//   assertEquals(
+//     p("\x04\x08", "/", 2, "\x82\xA0", "\x30"),
+//     MarshalRegexp(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+//       ruby18Compat: true,
+//     }),
+//   );
+// });
+
+Deno.test("parse parses Regexp1.8 - with ignoreCase", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "foo", "\x01"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      ignoreCase: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - with multiline", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "foo", "\x02"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      multiline: true,
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - with extended", () => {
+  assertEquals(
+    p("\x04\x08", "/", 3, "foo", "\x04"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      extended: true,
+    }),
+  );
+});
+
+// // Ambiguous
+// Deno.test("parse parses Regexp1.8 - with noEncoding", () => {
+//   assertEquals(
+//     p("\x04\x08", "/", 3, "foo", "\x10"),
+//     MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+//       ruby18Compat: true,
+//       noEncoding: true,
+//     }),
+//   );
+// });
+
+Deno.test("parse parses Regexp1.8 - with ivars", () => {
+  assertEquals(
+    p("\x04\x08", "I/", 3, "foo", "\x00", 1, ":", 4, "@foo", "i", 42),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - with custom class", () => {
+  assertEquals(
+    p("\x04\x08", "C:", 8, "MyRegexp", "/", 3, "foo", "\x00"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      className: "MyRegexp",
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - with extenders", () => {
+  assertEquals(
+    p("\x04\x08", ...["e:", 4, "Mod1"], "/", 3, "foo", "\x00"),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses Regexp1.8 - with all", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyRegexp"],
+      ...["/", 3, "foo", "\x00"],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalRegexp(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ruby18Compat: true,
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyRegexp",
       extenders: ["Mod1"],
     }),
   );

@@ -506,7 +506,7 @@ export class Parser {
     const encoding = this.#hasEncoding(ivars)
       ? this.#interpretEncoding(ivars)
       : REncoding.ASCII_8BIT;
-    if (encoding === REncoding.ASCII_8BIT && flags !== 0x30) {
+    if (encoding === REncoding.ASCII_8BIT && (flags & 0x50) !== 0x10) {
       // Interpret it as dump from Ruby 1.8
       let noEncoding = false;
       let ruby18Encoding: REncoding;
@@ -514,7 +514,8 @@ export class Parser {
         case 0x00:
           ruby18Encoding = sourceBytes.every((b) => b < 0x80)
             ? REncoding.US_ASCII
-            : REncoding.UTF_8;
+            // Indicates $KCODE
+            : REncoding.ASCII_8BIT;
           break;
         case 0x10:
           ruby18Encoding = sourceBytes.every((b) => b < 0x80)
@@ -542,6 +543,7 @@ export class Parser {
         multiline,
         extended,
         noEncoding,
+        ruby18Compat: true,
         className,
         ivars,
         extenders,
@@ -550,9 +552,11 @@ export class Parser {
 
     const noEncoding = Boolean(flags & 0x20);
     const fixedEncoding = Boolean(flags & 0x10);
-    const expectFixedEncoding = encoding !== REncoding.ASCII_8BIT;
+    const expectFixedEncoding = encoding !== REncoding.US_ASCII;
     if (fixedEncoding !== expectFixedEncoding) {
-      throw new SyntaxError("Invalid FIXEDENCODING flag value");
+      throw new SyntaxError(
+        `Invalid FIXEDENCODING flag value (expected ${expectFixedEncoding})`,
+      );
     }
     if (flags & 0xC8) {
       throw new SyntaxError("Invalid flags for Regexp");
@@ -562,6 +566,7 @@ export class Parser {
       multiline,
       extended,
       noEncoding,
+      ruby18Compat: false,
       className,
       ivars,
       extenders,
