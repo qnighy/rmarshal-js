@@ -7,6 +7,7 @@ import {
   MarshalInteger,
   MarshalNil,
   MarshalObject,
+  MarshalString,
   MarshalSymbol,
   type MarshalValue,
 } from "./ast.ts";
@@ -1272,6 +1273,144 @@ Deno.test("parse parses Hash - with all", () => {
       extenders: ["Mod1"],
       defaultValue: MarshalInteger(42n),
       ruby2Keywords: true,
+    }),
+  );
+});
+
+Deno.test("parse parses String - ASCII-8BIT simple", () => {
+  assertEquals(
+    p("\x04\x08", '"', 3, "foo"),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT),
+  );
+  assertEquals(
+    p("\x04\x08", '"', 3, "\xE3\x81\x82"),
+    MarshalString(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.ASCII_8BIT),
+  );
+});
+
+Deno.test("parse parses String - US-ASCII simple", () => {
+  assertEquals(
+    p("\x04\x08", 'I"', 3, "foo", 1, ":", 1, "E", "F"),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII),
+  );
+});
+
+Deno.test("parse parses String - UTF-8 simple", () => {
+  assertEquals(
+    p("\x04\x08", 'I"', 3, "\xE3\x81\x82", 1, ":", 1, "E", "T"),
+    MarshalString(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8),
+  );
+});
+
+// Deno.test("parse parses String - other encoding simple", () => {
+//   assertEquals(
+//     p(
+//       "\x04\x08",
+//       'I"',
+//       2,
+//       "\x82\xA0",
+//       1,
+//       ":",
+//       8,
+//       "encoding",
+//       '"',
+//       11,
+//       "Windows-31J",
+//     ),
+//     MarshalString(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J),
+//   );
+// });
+
+Deno.test("parse parses String - ASCII-8BIT with ivars", () => {
+  assertEquals(
+    p("\x04\x08", 'I"', 3, "foo", 1, ":", 4, "@foo", "i", 42),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses String - US-ASCII with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...['"', 3, "foo"],
+      2,
+      ...[":", 1, "E", "F"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.US_ASCII, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses String - UTF-8 with ivars", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...['"', 3, "\xE3\x81\x82"],
+      2,
+      ...[":", 1, "E", "T"],
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalString(Uint8Array.from([0xE3, 0x81, 0x82]), REncoding.UTF_8, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+// Deno.test("parse parses String - other encoding with ivars", () => {
+//   assertEquals(
+//     p(
+//       "\x04\x08",
+//       "I",
+//       ...['"', 2, "\x82\xA0"],
+//       2,
+//       ...[":", 8, "encoding", '"', 11, "Windows-31J"],
+//       ...[":", 4, "@foo", "i", 42],
+//     ),
+//     MarshalString(Uint8Array.from([0x82, 0xA0]), REncoding.Windows_31J, {
+//       ivars: new Map([["@foo", MarshalInteger(42n)]]),
+//     }),
+//   );
+// });
+
+Deno.test("parse parses String - with custom class", () => {
+  assertEquals(
+    p("\x04\x08", "C:", 8, "MyString", '"', 3, "foo"),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+      className: "MyString",
+    }),
+  );
+});
+
+Deno.test("parse parses String - with extenders", () => {
+  assertEquals(
+    p("\x04\x08", ...["e:", 4, "Mod1"], '"', 3, "foo"),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+      extenders: ["Mod1"],
+    }),
+  );
+});
+
+Deno.test("parse parses String - with all", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 8, "MyString"],
+      ...['"', 3, "foo"],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalString(Uint8Array.from([0x66, 0x6F, 0x6F]), REncoding.ASCII_8BIT, {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyString",
+      extenders: ["Mod1"],
     }),
   );
 });
