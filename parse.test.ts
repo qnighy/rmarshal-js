@@ -1,6 +1,7 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 import {
   MarshalBoolean,
+  MarshalFloat,
   MarshalInteger,
   MarshalNil,
   type MarshalValue,
@@ -22,6 +23,12 @@ Deno.test("parse rejects short or long data", () => {
     () => p("\x04\x08", "0", "0"),
     SyntaxError,
     "Unexpected trailing data",
+  );
+  // for #readByteSlice
+  assertThrows(
+    () => p("\x04\x08", "f", 1),
+    SyntaxError,
+    "Unexpected end of input",
   );
 });
 
@@ -437,4 +444,206 @@ Deno.test("parse rejects Bignum redundant negative 3-word form", () => {
     SyntaxError,
     "Non-canonical Bignum representation",
   );
+});
+
+Deno.test("parse rejects empty Float", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 0),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses NaN", () => {
+  assertEquals(p("\x04\x08", "f", 3, "nan"), MarshalFloat(NaN));
+});
+
+Deno.test("parse parses alternative allowed NaN representations", () => {
+  assertEquals(p("\x04\x08", "f", 4, "-nan"), MarshalFloat(NaN));
+  assertEquals(p("\x04\x08", "f", 12, "nan(ignored)"), MarshalFloat(NaN));
+  assertEquals(p("\x04\x08", "f", 13, "-nan(ignored)"), MarshalFloat(NaN));
+});
+
+Deno.test("parse rejects other non-canonical NaNs", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "NaN"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+  assertThrows(
+    () => p("\x04\x08", "f", 11, "nan ignored"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses Infinity and -Infinity", () => {
+  assertEquals(p("\x04\x08", "f", 3, "inf"), MarshalFloat(Infinity));
+  assertEquals(p("\x04\x08", "f", 4, "-inf"), MarshalFloat(-Infinity));
+});
+
+Deno.test("parse parses alternative allowed Infinity representations", () => {
+  assertEquals(p("\x04\x08", "f", 8, "infinity"), MarshalFloat(Infinity));
+  assertEquals(p("\x04\x08", "f", 9, "-infinity"), MarshalFloat(-Infinity));
+});
+
+Deno.test("parse rejects other non-canonical Infinities", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "INF"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "Inf"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+  assertThrows(
+    () => p("\x04\x08", "f", 8, "Infinity"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses zeroes", () => {
+  assertEquals(p("\x04\x08", "f", 1, "0"), MarshalFloat(0));
+  assertStrictEquals((p("\x04\x08", "f", 1, "0") as MarshalFloat).value, +0);
+  assertEquals(p("\x04\x08", "f", 2, "-0"), MarshalFloat(-0));
+  assertStrictEquals((p("\x04\x08", "f", 2, "-0") as MarshalFloat).value, -0);
+});
+
+Deno.test("parse rejects plus signs", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 2, "+0"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects leading zeroes", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 2, "00"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+  assertThrows(
+    () => p("\x04\x08", "f", 2, "01"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses Float integers in non-scientific notation", () => {
+  assertEquals(p("\x04\x08", "f", 1, "1"), MarshalFloat(1));
+  assertEquals(p("\x04\x08", "f", 2, "-1"), MarshalFloat(-1));
+  assertEquals(
+    p("\x04\x08", "f", 16, "9007199254740992"),
+    MarshalFloat(9007199254740992.0),
+  );
+  assertEquals(
+    p("\x04\x08", "f", 17, "72057594037927896"),
+    MarshalFloat(72057594037927896.0),
+  );
+  assertEquals(
+    p("\x04\x08", "f", 17, "-9007199254740992"),
+    MarshalFloat(-9007199254740992.0),
+  );
+  assertEquals(
+    p("\x04\x08", "f", 18, "-72057594037927896"),
+    MarshalFloat(-72057594037927896.0),
+  );
+});
+
+Deno.test("parse rejects trailing decimal point", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 2, "1."),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects trailing zeroes in fraction", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "1.0"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses Float integers in scientific notation", () => {
+  assertEquals(p("\x04\x08", "f", 3, "1e1"), MarshalFloat(10));
+  assertEquals(p("\x04\x08", "f", 4, "-1e1"), MarshalFloat(-10));
+  assertEquals(
+    p("\x04\x08", "f", 22, "1.7976931348623157e308"),
+    MarshalFloat(1.7976931348623157e+308),
+  );
+  assertEquals(
+    p("\x04\x08", "f", 23, "-1.7976931348623157e308"),
+    MarshalFloat(-1.7976931348623157e+308),
+  );
+});
+
+Deno.test("parse parses alternative plus sign in exponent", () => {
+  assertEquals(p("\x04\x08", "f", 4, "1e+1"), MarshalFloat(10));
+  assertEquals(p("\x04\x08", "f", 5, "-1e+1"), MarshalFloat(-10));
+});
+
+Deno.test("parse rejects capital E in exponent", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "1E1"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects small fraction in scientific notation", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 5, "0.1e2"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects large fraction in scientific notation", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 4, "11e1"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects zero exponent", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 3, "1e0"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse rejects leading zeroes in exponent", () => {
+  assertThrows(
+    () => p("\x04\x08", "f", 4, "1e01"),
+    SyntaxError,
+    "Invalid Float format",
+  );
+});
+
+Deno.test("parse parses Float non-scientific fractions", () => {
+  assertEquals(p("\x04\x08", "f", 3, "1.1"), MarshalFloat(1.1));
+  assertEquals(p("\x04\x08", "f", 4, "-1.1"), MarshalFloat(-1.1));
+  assertEquals(p("\x04\x08", "f", 6, "0.0001"), MarshalFloat(0.0001));
+  assertEquals(p("\x04\x08", "f", 7, "-0.0001"), MarshalFloat(-0.0001));
+});
+
+Deno.test("parse parses Float scientific fractions", () => {
+  assertEquals(
+    p("\x04\x08", "f", 20, "9.999999999999999e-5"),
+    MarshalFloat(9.999999999999999e-5),
+  );
+  assertEquals(
+    p("\x04\x08", "f", 21, "-9.999999999999999e-5"),
+    MarshalFloat(-9.999999999999999e-5),
+  );
+  assertEquals(p("\x04\x08", "f", 6, "5e-324"), MarshalFloat(5e-324));
+  assertEquals(p("\x04\x08", "f", 7, "-5e-324"), MarshalFloat(-5e-324));
 });

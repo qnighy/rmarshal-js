@@ -1,5 +1,6 @@
 import {
   MarshalBoolean,
+  MarshalFloat,
   MarshalInteger,
   MarshalNil,
   MarshalValue,
@@ -97,7 +98,7 @@ export class Parser {
       case TYPE_BIGNUM:
         return this.#readBignumBody();
       case TYPE_FLOAT:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readFloatBody();
       case TYPE_SYMBOL:
         throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
       case TYPE_SYMLINK:
@@ -174,6 +175,55 @@ export class Parser {
       }
     }
     return MarshalInteger(value);
+  }
+
+  #readFloatBody(): MarshalValue {
+    const text = new TextDecoder().decode(this.#readByteSlice());
+    // Ruby >= 1.8 emits "inf", "-inf", or "nan" for non-finite numbers
+    // but Ruby < 1.8 uses sprintf(3) with "%.16g",
+    // whose definition in Open Group states:
+    //
+    // - Infinity can be either "inf" or "infinity"
+    // - Negative infinity can be either "-inf" or "-infinity"
+    // - NaN can be either "nan" or "-nan" possibly followed
+    //   by any sequence of characters wrapped in parentheses.
+    // https://pubs.opengroup.org/onlinepubs/009695399/functions/sprintf.html
+    switch (text) {
+      case "inf":
+      case "infinity":
+        return MarshalFloat(Infinity);
+      case "-inf":
+      case "-infinity":
+        return MarshalFloat(-Infinity);
+      case "nan":
+      case "-nan":
+        return MarshalFloat(NaN);
+      default:
+        if (
+          (text.startsWith("nan(") || text.startsWith("-nan(")) &&
+          text.endsWith(")")
+        ) {
+          return MarshalFloat(NaN);
+        }
+    }
+    if (
+      /^-?(?:(?:[1-9][0-9]*|0)(?:\.[0-9]*[1-9])?|[1-9](?:\.[0-9]*[1-9])?e[\-+]?[1-9][0-9]*)$/
+        .test(text)
+    ) {
+      return MarshalFloat(Number(text));
+    } else {
+      throw new SyntaxError("Invalid Float format");
+    }
+  }
+
+  #readByteSlice(): Uint8Array {
+    const length = this.#readIndex();
+    if (this.#pos + length > this.#buf.length) {
+      throw new SyntaxError("Unexpected end of input");
+    }
+    const slice = this.#buf.subarray(this.#pos, this.#pos + length);
+    this.#pos += length;
+    return slice;
   }
 
   #readIndex(): number {
