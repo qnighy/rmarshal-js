@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { dump } from "./dump2.ts";
-import { NullMapper, SafeIntegerMapper } from "./mapper.ts";
+import { NullMapper, SafeIntegerMapper } from "./mappers.ts";
 import { seq } from "./testutil.ts";
 
 Deno.test("dump dumps the value using mapper", () => {
