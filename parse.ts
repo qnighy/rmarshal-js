@@ -174,16 +174,20 @@ export class Parser {
         return this.#readSymbolBody(true);
       case TYPE_IVAR:
         throw new SyntaxError("Nested instance variable container");
+      case TYPE_EXTENDED:
+        return this.#readExtendedBody(true);
+      case TYPE_UCLASS:
+        return this.#readUClassBody(true, []);
       case TYPE_ARRAY:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readArrayBody(true, [], undefined);
       case TYPE_HASH:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readHashBody(true, [], undefined, false);
       case TYPE_HASH_DEF:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readHashBody(true, [], undefined, true);
       case TYPE_STRING:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readStringBody(true, [], undefined);
       case TYPE_REGEXP:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readRegexpBody(true, [], undefined);
       case TYPE_USERDEF:
         throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
       default:

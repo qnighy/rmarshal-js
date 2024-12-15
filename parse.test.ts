@@ -1078,3 +1078,58 @@ Deno.test("parse parses Object - with extenders", () => {
     }),
   );
 });
+
+Deno.test("parse parses Array - simple case", () => {
+  assertEquals(p("\x04\x08", "[", 0), MarshalArray([]));
+  assertEquals(
+    p("\x04\x08", "[", 2, "i", 42, "0"),
+    MarshalArray([MarshalInteger(42n), MarshalNil()]),
+  );
+});
+
+Deno.test("parse parses Array - with ivars", () => {
+  assertEquals(
+    p("\x04\x08", "I[", 1, "0", 1, ":", 4, "@foo", "i", 42),
+    MarshalArray([MarshalNil()], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+    }),
+  );
+});
+
+Deno.test("parse parses Array - with custom class", () => {
+  assertEquals(
+    p("\x04\x08", "C:", 7, "MyArray", "[", 0),
+    MarshalArray([], { className: "MyArray" }),
+  );
+});
+
+Deno.test("parse parses Array - with extenders", () => {
+  assertEquals(
+    p("\x04\x08", ...["e:", 4, "Mod1"], "[", 0),
+    MarshalArray([], { extenders: ["Mod1"] }),
+  );
+});
+
+Deno.test("parse parses Array - with all", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 7, "MyArray"],
+      "[",
+      0,
+      1,
+      ":",
+      4,
+      "@foo",
+      "i",
+      42,
+    ),
+    MarshalArray([], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyArray",
+      extenders: ["Mod1"],
+    }),
+  );
+});
