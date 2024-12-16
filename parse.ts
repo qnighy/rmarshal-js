@@ -1,6 +1,13 @@
-import { MarshalArray } from "./ast.ts";
+import {
+  MarshalArray,
+  MarshalDump,
+  MarshalDumpData,
+  MarshalModule,
+  MarshalStruct,
+} from "./ast.ts";
 import { MarshalHash } from "./ast.ts";
 import { MarshalRegexp } from "./ast.ts";
+import { MarshalDumpBytes } from "./ast.ts";
 import { MarshalString } from "./ast.ts";
 import {
   MarshalBoolean,
@@ -69,6 +76,7 @@ export class Parser {
   #pos = 0;
   #symbols!: (RSymbol | undefined)[];
   #visitedSymbols!: Set<RSymbol>;
+  #links!: (MarshalValue | undefined)[];
 
   constructor(buf: Uint8Array) {
     this.#buf = buf;
@@ -85,6 +93,7 @@ export class Parser {
   readTopLevel(): MarshalValue {
     this.#symbols = [];
     this.#visitedSymbols = new Set();
+    this.#links = [];
     const major = this.#readByte();
     const minor = this.#readByte();
     if (major !== MARSHAL_MAJOR || minor > MARSHAL_MINOR) {
@@ -107,9 +116,9 @@ export class Parser {
       case TYPE_FIXNUM:
         return this.#readFixnumBody();
       case TYPE_BIGNUM:
-        return this.#readBignumBody();
+        return this.#readBignumBody(this.#reserveLinkId());
       case TYPE_FLOAT:
-        return this.#readFloatBody();
+        return this.#readFloatBody(this.#reserveLinkId());
       case TYPE_SYMBOL:
         return this.#readSymbolBody(false);
       case TYPE_SYMLINK:
@@ -117,37 +126,59 @@ export class Parser {
       case TYPE_IVAR:
         return this.#readIvarBody();
       case TYPE_EXTENDED:
-        return this.#readExtendedBody(false);
+        return this.#readExtendedBody(this.#reserveLinkId(), false);
       case TYPE_UCLASS:
-        return this.#readUClassBody(false, []);
+        return this.#readUClassBody(this.#reserveLinkId(), false, []);
       case TYPE_OBJECT:
-        return this.#readObjectBody(false, []);
+        return this.#readObjectBody(this.#reserveLinkId(), false, []);
       case TYPE_ARRAY:
-        return this.#readArrayBody(false, [], undefined);
+        return this.#readArrayBody(this.#reserveLinkId(), false, [], undefined);
       case TYPE_HASH:
-        return this.#readHashBody(false, [], undefined, false);
+        return this.#readHashBody(
+          this.#reserveLinkId(),
+          false,
+          [],
+          undefined,
+          false,
+        );
       case TYPE_HASH_DEF:
-        return this.#readHashBody(false, [], undefined, true);
+        return this.#readHashBody(
+          this.#reserveLinkId(),
+          false,
+          [],
+          undefined,
+          true,
+        );
       case TYPE_STRING:
-        return this.#readStringBody(false, [], undefined);
+        return this.#readStringBody(
+          this.#reserveLinkId(),
+          false,
+          [],
+          undefined,
+        );
       case TYPE_REGEXP:
-        return this.#readRegexpBody(false, [], undefined);
+        return this.#readRegexpBody(
+          this.#reserveLinkId(),
+          false,
+          [],
+          undefined,
+        );
       case TYPE_USRMARSHAL:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readDumpBody(this.#reserveLinkId());
       case TYPE_USERDEF:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readDumpBytesBody(this.#reserveLinkId(), false);
       case TYPE_DATA:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readDumpDataBody(this.#reserveLinkId());
       case TYPE_STRUCT:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readStructBody(this.#reserveLinkId());
       case TYPE_MODULE_OLD:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readModuleBody(this.#reserveLinkId(), "legacy");
       case TYPE_CLASS:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readModuleBody(this.#reserveLinkId(), "class");
       case TYPE_MODULE:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readModuleBody(this.#reserveLinkId(), "module");
       case TYPE_LINK:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readLinkBody();
       default:
         throw new SyntaxError(`Unknown type: ${describeByte(type)}`);
     }
@@ -175,21 +206,33 @@ export class Parser {
       case TYPE_IVAR:
         throw new SyntaxError("Nested instance variable container");
       case TYPE_EXTENDED:
-        return this.#readExtendedBody(true);
+        return this.#readExtendedBody(this.#reserveLinkId(), true);
       case TYPE_UCLASS:
-        return this.#readUClassBody(true, []);
+        return this.#readUClassBody(this.#reserveLinkId(), true, []);
       case TYPE_ARRAY:
-        return this.#readArrayBody(true, [], undefined);
+        return this.#readArrayBody(this.#reserveLinkId(), true, [], undefined);
       case TYPE_HASH:
-        return this.#readHashBody(true, [], undefined, false);
+        return this.#readHashBody(
+          this.#reserveLinkId(),
+          true,
+          [],
+          undefined,
+          false,
+        );
       case TYPE_HASH_DEF:
-        return this.#readHashBody(true, [], undefined, true);
+        return this.#readHashBody(
+          this.#reserveLinkId(),
+          true,
+          [],
+          undefined,
+          true,
+        );
       case TYPE_STRING:
-        return this.#readStringBody(true, [], undefined);
+        return this.#readStringBody(this.#reserveLinkId(), true, [], undefined);
       case TYPE_REGEXP:
-        return this.#readRegexpBody(true, [], undefined);
+        return this.#readRegexpBody(this.#reserveLinkId(), true, [], undefined);
       case TYPE_USERDEF:
-        throw new Error(`TODO: not implemented yet: ${describeType(type)}`);
+        return this.#readDumpBytesBody(this.#reserveLinkId(), true);
       default:
         throw new SyntaxError(
           `${describeType(type)} cannot include instance variables`,
@@ -218,7 +261,7 @@ export class Parser {
     }
   }
 
-  #readExtendedBody(hasIvar: boolean): MarshalValue {
+  #readExtendedBody(linkId: number, hasIvar: boolean): MarshalValue {
     const extenders: RSymbol[] = [];
     while (true) {
       const extender = this.#readSymbol().value;
@@ -231,19 +274,31 @@ export class Parser {
         case TYPE_EXTENDED:
           continue;
         case TYPE_UCLASS:
-          return this.#readUClassBody(hasIvar, extenders);
+          return this.#readUClassBody(linkId, hasIvar, extenders);
         case TYPE_OBJECT:
-          return this.#readObjectBody(hasIvar, extenders);
+          return this.#readObjectBody(linkId, hasIvar, extenders);
         case TYPE_ARRAY:
-          return this.#readArrayBody(hasIvar, extenders, undefined);
+          return this.#readArrayBody(linkId, hasIvar, extenders, undefined);
         case TYPE_HASH:
-          return this.#readHashBody(hasIvar, extenders, undefined, false);
+          return this.#readHashBody(
+            linkId,
+            hasIvar,
+            extenders,
+            undefined,
+            false,
+          );
         case TYPE_HASH_DEF:
-          return this.#readHashBody(hasIvar, extenders, undefined, true);
+          return this.#readHashBody(
+            linkId,
+            hasIvar,
+            extenders,
+            undefined,
+            true,
+          );
         case TYPE_STRING:
-          return this.#readStringBody(hasIvar, extenders, undefined);
+          return this.#readStringBody(linkId, hasIvar, extenders, undefined);
         case TYPE_REGEXP:
-          return this.#readRegexpBody(hasIvar, extenders, undefined);
+          return this.#readRegexpBody(linkId, hasIvar, extenders, undefined);
         default:
           throw new SyntaxError(
             `${describeType(type)} cannot include extenders`,
@@ -252,7 +307,11 @@ export class Parser {
     }
   }
 
-  #readUClassBody(hasIvar: boolean, extenders: RSymbol[]): MarshalValue {
+  #readUClassBody(
+    linkId: number,
+    hasIvar: boolean,
+    extenders: RSymbol[],
+  ): MarshalValue {
     const className = this.#readSymbol().value;
     const type = this.#readByte();
     switch (type) {
@@ -265,15 +324,15 @@ export class Parser {
       case TYPE_OBJECT:
         throw new SyntaxError("Invalid nesting: C -> o");
       case TYPE_ARRAY:
-        return this.#readArrayBody(hasIvar, extenders, className);
+        return this.#readArrayBody(linkId, hasIvar, extenders, className);
       case TYPE_HASH:
-        return this.#readHashBody(hasIvar, extenders, className, false);
+        return this.#readHashBody(linkId, hasIvar, extenders, className, false);
       case TYPE_HASH_DEF:
-        return this.#readHashBody(hasIvar, extenders, className, true);
+        return this.#readHashBody(linkId, hasIvar, extenders, className, true);
       case TYPE_STRING:
-        return this.#readStringBody(hasIvar, extenders, className);
+        return this.#readStringBody(linkId, hasIvar, extenders, className);
       case TYPE_REGEXP:
-        return this.#readRegexpBody(hasIvar, extenders, className);
+        return this.#readRegexpBody(linkId, hasIvar, extenders, className);
       default:
         throw new SyntaxError(
           `${
@@ -291,7 +350,7 @@ export class Parser {
     return MarshalInteger(BigInt(num));
   }
 
-  #readBignumBody(): MarshalInteger {
+  #readBignumBody(linkId: number): MarshalInteger {
     const signByte = this.#readByte();
     if (signByte !== SIGN_POSITIVE && signByte !== SIGN_NEGATIVE) {
       throw new SyntaxError("Invalid Bignum sign byte");
@@ -315,10 +374,10 @@ export class Parser {
         throw new SyntaxError("Non-canonical Bignum representation");
       }
     }
-    return MarshalInteger(value);
+    return this.#link(linkId, MarshalInteger(value));
   }
 
-  #readFloatBody(): MarshalValue {
+  #readFloatBody(linkId: number): MarshalValue {
     const text = new TextDecoder().decode(this.#readByteSlice());
     // Ruby >= 1.8 emits "inf", "-inf", or "nan" for non-finite numbers
     // but Ruby < 1.8 uses sprintf(3) with "%.16g",
@@ -332,26 +391,26 @@ export class Parser {
     switch (text) {
       case "inf":
       case "infinity":
-        return MarshalFloat(Infinity);
+        return this.#link(linkId, MarshalFloat(Infinity));
       case "-inf":
       case "-infinity":
-        return MarshalFloat(-Infinity);
+        return this.#link(linkId, MarshalFloat(-Infinity));
       case "nan":
       case "-nan":
-        return MarshalFloat(NaN);
+        return this.#link(linkId, MarshalFloat(NaN));
       default:
         if (
           (text.startsWith("nan(") || text.startsWith("-nan(")) &&
           text.endsWith(")")
         ) {
-          return MarshalFloat(NaN);
+          return this.#link(linkId, MarshalFloat(NaN));
         }
     }
     if (
       /^-?(?:(?:[1-9][0-9]*|0)(?:\.[0-9]*[1-9])?|[1-9](?:\.[0-9]*[1-9])?e[\-+]?[1-9][0-9]*)$/
         .test(text)
     ) {
-      return MarshalFloat(Number(text));
+      return this.#link(linkId, MarshalFloat(Number(text)));
     } else {
       throw new SyntaxError("Invalid Float format");
     }
@@ -406,6 +465,7 @@ export class Parser {
   }
 
   #readObjectBody(
+    linkId: number,
     hasRedundantIvar: boolean,
     extenders: RSymbol[],
   ): MarshalValue {
@@ -415,84 +475,89 @@ export class Parser {
       );
     }
     const className = this.#readSymbol().value;
+    const obj = this.#link(
+      linkId,
+      MarshalObject(className, new Map(), { extenders }),
+    );
     const numIvars = this.#readIndex();
-    const ivars = new Map<RSymbol, MarshalValue>();
+    obj.ivars = new Map<RSymbol, MarshalValue>();
     for (let i = 0; i < numIvars; i++) {
       const key = this.#readSymbol().value;
       const value = this.#readValue();
-      if (ivars.has(key)) {
+      if (obj.ivars.has(key)) {
         throw new SyntaxError("Duplicate instance variables");
       }
-      ivars.set(key, value);
+      obj.ivars.set(key, value);
     }
-    return MarshalObject(className, ivars, { extenders });
+    return obj;
   }
 
   #readArrayBody(
+    linkId: number,
     hasIvar: boolean,
     extenders: RSymbol[],
     className: RSymbol | undefined,
   ): MarshalValue {
+    const obj = this.#link(linkId, MarshalArray([], { className, extenders }));
     const numElems = this.#readIndex();
-    const elems: MarshalValue[] = [];
     for (let i = 0; i < numElems; i++) {
-      elems.push(this.#readValue());
+      obj.elements.push(this.#readValue());
     }
-    const ivars = this.#readAHSRIvars(hasIvar);
-    return MarshalArray(elems, { className, ivars, extenders });
+    obj.ivars = this.#readAHSRIvars(hasIvar);
+    return obj;
   }
 
   #readHashBody(
+    linkId: number,
     hasIvar: boolean,
     extenders: RSymbol[],
     className: RSymbol | undefined,
     hasDefault: boolean,
   ): MarshalValue {
+    const obj = this.#link(linkId, MarshalHash([], { className, extenders }));
     const numEntries = this.#readIndex();
-    const entries: [MarshalValue, MarshalValue][] = [];
     for (let i = 0; i < numEntries; i++) {
       const key = this.#readValue();
       const value = this.#readValue();
-      entries.push([key, value]);
+      obj.entries.push([key, value]);
     }
-    const defaultValue = hasDefault ? this.#readValue() : undefined;
-    if (defaultValue?.type === "NilClass") {
+    obj.defaultValue = hasDefault ? this.#readValue() : undefined;
+    if (obj.defaultValue?.type === "NilClass") {
       throw new SyntaxError("Invalid default value of Hash: explicit nil");
     }
-    const ivars = this.#readAHSRIvars(hasIvar);
-    let ruby2Keywords = false;
-    if (ivars.has("K")) {
-      const k = ivars.get("K")!;
-      ivars.delete("K");
+    obj.ivars = this.#readAHSRIvars(hasIvar);
+    if (obj.ivars.has("K")) {
+      const k = obj.ivars.get("K")!;
+      obj.ivars.delete("K");
       if (k.type === "Boolean" && k.value) {
-        ruby2Keywords = true;
+        obj.ruby2Keywords = true;
       } else {
         throw new SyntaxError("Invalid K value");
       }
     }
-    return MarshalHash(entries, {
-      defaultValue,
-      ruby2Keywords,
-      className,
-      ivars,
-      extenders,
-    });
+    return obj;
   }
 
   #readStringBody(
+    linkId: number,
     hasIvar: boolean,
     extenders: RSymbol[],
     className: RSymbol | undefined,
   ): MarshalValue {
     const bytes = this.#readByteSlice();
-    const ivars = this.#readAHSRIvars(hasIvar);
-    const encoding = this.#hasEncoding(ivars)
-      ? this.#interpretEncoding(ivars)
+    const obj = this.#link(
+      linkId,
+      MarshalString(bytes, REncoding.ASCII_8BIT, { className, extenders }),
+    );
+    obj.ivars = this.#readAHSRIvars(hasIvar);
+    obj.encoding = this.#hasEncoding(obj.ivars)
+      ? this.#interpretEncoding(obj.ivars)
       : REncoding.ASCII_8BIT;
-    return MarshalString(bytes, encoding, { className, ivars, extenders });
+    return obj;
   }
 
   #readRegexpBody(
+    linkId: number,
     hasIvar: boolean,
     extenders: RSymbol[],
     className: RSymbol | undefined,
@@ -538,16 +603,19 @@ export class Parser {
       if (flags & 0x88) {
         throw new SyntaxError("Invalid flags for Ruby 1.8 Regexp");
       }
-      return MarshalRegexp(sourceBytes, ruby18Encoding, {
-        ignoreCase,
-        multiline,
-        extended,
-        noEncoding,
-        ruby18Compat: true,
-        className,
-        ivars,
-        extenders,
-      });
+      return this.#link(
+        linkId,
+        MarshalRegexp(sourceBytes, ruby18Encoding, {
+          ignoreCase,
+          multiline,
+          extended,
+          noEncoding,
+          ruby18Compat: true,
+          className,
+          ivars,
+          extenders,
+        }),
+      );
     }
 
     const noEncoding = Boolean(flags & 0x20);
@@ -561,16 +629,19 @@ export class Parser {
     if (flags & 0xC8) {
       throw new SyntaxError("Invalid flags for Regexp");
     }
-    return MarshalRegexp(sourceBytes, encoding, {
-      ignoreCase,
-      multiline,
-      extended,
-      noEncoding,
-      ruby18Compat: false,
-      className,
-      ivars,
-      extenders,
-    });
+    return this.#link(
+      linkId,
+      MarshalRegexp(sourceBytes, encoding, {
+        ignoreCase,
+        multiline,
+        extended,
+        noEncoding,
+        ruby18Compat: false,
+        className,
+        ivars,
+        extenders,
+      }),
+    );
   }
 
   #readAHSRIvars(hasIvar: boolean): Map<RSymbol, MarshalValue> {
@@ -627,6 +698,83 @@ export class Parser {
     } else {
       throw new SyntaxError("Not an encoding ivar");
     }
+  }
+
+  #readDumpBody(linkId: number): MarshalValue {
+    const className = this.#readSymbol().value;
+    const dump = this.#readValue();
+    return this.#link(linkId, MarshalDump(className, dump));
+  }
+
+  #readDumpBytesBody(linkId: number, hasIvar: boolean): MarshalValue {
+    const className = this.#readSymbol().value;
+    const bytes = this.#readByteSlice();
+    if (!hasIvar) {
+      return this.#link(
+        linkId,
+        MarshalDumpBytes(className, bytes, REncoding.ASCII_8BIT),
+      );
+    }
+    const ivars = this.#readIvars();
+    if (ivars.size === 0) {
+      throw new SyntaxError("Redundant ivar container with no ivars");
+    }
+    const encoding = this.#interpretEncoding(ivars);
+    if (ivars.size > 0) {
+      // TODO: accept extra ivars
+      throw new SyntaxError("Extra ivars for #_dump");
+    }
+    return this.#link(linkId, MarshalDumpBytes(className, bytes, encoding));
+  }
+
+  #readDumpDataBody(linkId: number): MarshalValue {
+    const className = this.#readSymbol().value;
+    const dump = this.#readValue();
+    return this.#link(linkId, MarshalDumpData(className, dump));
+  }
+
+  #readStructBody(linkId: number): MarshalValue {
+    const className = this.#readSymbol().value;
+    const obj = this.#link(linkId, MarshalStruct(className, []));
+    const numMembers = this.#readIndex();
+    for (let i = 0; i < numMembers; i++) {
+      const member = this.#readSymbol().value;
+      const value = this.#readValue();
+      obj.entries.push([member, value]);
+    }
+    return obj;
+  }
+
+  #readModuleBody(
+    linkId: number,
+    kind: "legacy" | "class" | "module",
+  ): MarshalValue {
+    const moduleNameBytes = this.#readByteSlice();
+    const moduleName = RSymbol(moduleNameBytes, REncoding.ASCII_8BIT);
+    return this.#link(linkId, MarshalModule(kind, moduleName));
+  }
+
+  #reserveLinkId(): number {
+    const linkId = this.#links.length;
+    this.#links.push(undefined);
+    return linkId;
+  }
+
+  #link<T extends MarshalValue>(linkId: number, value: T): T {
+    this.#links[linkId] = value;
+    return value;
+  }
+
+  #readLinkBody(): MarshalValue {
+    const linkId = this.#readIndex();
+    if (linkId >= this.#links.length) {
+      throw new SyntaxError("Invalid link");
+    }
+    const value = this.#links[linkId];
+    if (value == null) {
+      throw new SyntaxError("Invalid circular link");
+    }
+    return value;
   }
 
   #readByteSlice(): Uint8Array {
