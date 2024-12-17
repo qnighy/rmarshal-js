@@ -69,6 +69,7 @@ class Generator {
   #symbols!: Map<RSymbol, number>;
   #links!: Map<MarshalValue, number>;
   #nextLinkId!: number;
+  #disallowedLinks!: Set<MarshalValue>;
   #encodingNames!: Map<REncoding, MarshalString>;
 
   result(): Uint8Array {
@@ -79,6 +80,7 @@ class Generator {
     this.#symbols = new Map<RSymbol, number>();
     this.#links = new Map<MarshalValue, number>();
     this.#nextLinkId = 0;
+    this.#disallowedLinks = new Set();
     this.#encodingNames = new Map();
     this.#writeByte(MARSHAL_MAJOR);
     this.#writeByte(MARSHAL_MINOR);
@@ -259,11 +261,17 @@ class Generator {
     if (this.#tryWriteLink(value)) {
       return;
     }
+    if (value.ruby2Keywords && value.className != null) {
+      throw new Error("Hash with ruby2_keywords cannot have className");
+    }
 
     const extraIvars: [RSymbol, MarshalValue][] | undefined =
       value.ruby2Keywords ? [["K", MarshalBoolean(true)]] : undefined;
     this.#wrapAHSR(value, extraIvars, () => {
       const defaultValue = value.defaultValue;
+      if (defaultValue?.type === "NilClass") {
+        throw new Error("Hash default value cannot be nil");
+      }
       this.#writeByte(
         defaultValue == null ? TYPE_HASH : TYPE_HASH_DEF,
       );
@@ -295,6 +303,51 @@ class Generator {
   #writeRegexp(value: MarshalRegexp) {
     if (this.#tryWriteLink(value)) {
       return;
+    }
+
+    const encoding = value.encoding;
+    if (
+      !value.ruby18Compat &&
+      !encoding.isValidBytes(value.sourceBytes)
+    ) {
+      throw new Error("Regexp source contains invalid byte sequence");
+    } else if (
+      value.ruby18Compat && encoding === REncoding.US_ASCII &&
+      !encoding.isValidBytes(value.sourceBytes)
+    ) {
+      throw new Error(
+        "Non-ASCII encoding-less Regexp in Ruby 1.8 compat mode should be marked as ASCII-8BIT",
+      );
+    }
+    if (
+      encoding.asciiCompatible && value.sourceBytes.every((b) => b < 0x80) &&
+      encoding !== REncoding.US_ASCII &&
+      encoding !== REncoding.EUC_JP &&
+      encoding !== REncoding.Windows_31J &&
+      encoding !== REncoding.UTF_8
+    ) {
+      throw new Error(
+        "ASCII-compatible Regexp should be one of US-ASCII, EUC-JP, Windows-31J, or UTF-8 encoding",
+      );
+    } else if (
+      value.ruby18Compat &&
+      encoding !== REncoding.US_ASCII &&
+      encoding !== REncoding.ASCII_8BIT &&
+      encoding !== REncoding.EUC_JP &&
+      encoding !== REncoding.Windows_31J &&
+      encoding !== REncoding.UTF_8
+    ) {
+      throw new Error(
+        "Regexp in Ruby 1.8 compat mode should be one of US-ASCII, ASCII-8BIT, EUC-JP, Windows-31J, or UTF-8 encoding",
+      );
+    } else if (
+      value.noEncoding &&
+      encoding !== REncoding.US_ASCII &&
+      encoding !== REncoding.ASCII_8BIT
+    ) {
+      throw new Error(
+        "Regexp with noEncoding flag should be either in US-ASCII or ASCII-8BIT",
+      );
     }
 
     const extraIvars: [RSymbol, MarshalValue][] | undefined =
@@ -418,15 +471,18 @@ class Generator {
     if (this.#tryWriteLink(value)) {
       return;
     }
+    this.#preventLink(value);
     this.#writeByte(TYPE_USRMARSHAL);
     this.#writeSymbolValue(value.className);
     this.#writeValue(value.dump);
+    this.#allowLink(value);
   }
 
   #writeDumpBytes(value: MarshalDumpBytes) {
     if (this.#tryWriteLink(value)) {
       return;
     }
+    this.#preventLink(value);
     if (value.encoding === REncoding.ASCII_8BIT) {
       this.#writeByte(TYPE_USERDEF);
       this.#writeSymbolValue(value.className);
@@ -441,15 +497,18 @@ class Generator {
       this.#writeSymbolValue(encKey);
       this.#writeValue(encVal);
     }
+    this.#allowLink(value);
   }
 
   #writeDumpData(value: MarshalDumpData) {
     if (this.#tryWriteLink(value)) {
       return;
     }
+    this.#preventLink(value);
     this.#writeByte(TYPE_DATA);
     this.#writeSymbolValue(value.className);
     this.#writeValue(value.dump);
+    this.#allowLink(value);
   }
 
   #writeStruct(value: MarshalStruct) {
@@ -492,6 +551,9 @@ class Generator {
   #tryWriteLink(value: MarshalValue): boolean {
     const linkId = this.#links.get(value);
     if (linkId != null) {
+      if (this.#disallowedLinks.has(value)) {
+        throw new Error("Disallowed cyclic reference detected");
+      }
       this.#writeByte(TYPE_LINK);
       this.#writeLong(linkId);
       return true;
@@ -499,6 +561,14 @@ class Generator {
 
     this.#links.set(value, this.#nextLinkId++);
     return false;
+  }
+
+  #preventLink(value: MarshalValue) {
+    this.#disallowedLinks.add(value);
+  }
+
+  #allowLink(value: MarshalValue) {
+    this.#disallowedLinks.delete(value);
   }
 
   #writeBytes(bytes: Uint8Array) {

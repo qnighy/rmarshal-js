@@ -1255,7 +1255,7 @@ Deno.test("parse parses Hash - with extenders", () => {
   );
 });
 
-Deno.test("parse parses Hash - with all", () => {
+Deno.test("parse parses Hash - with all except ruby2Keywords", () => {
   assertEquals(
     p(
       "\x04\x08",
@@ -1264,13 +1264,32 @@ Deno.test("parse parses Hash - with all", () => {
       ...["C:", 6, "MyHash"],
       ...["}", 0],
       ...["i", 42],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+    MarshalHash([], {
+      ivars: new Map([["@foo", MarshalInteger(42n)]]),
+      className: "MyHash",
+      extenders: ["Mod1"],
+      defaultValue: MarshalInteger(42n),
+    }),
+  );
+});
+
+Deno.test("parse parses Hash - with all except className", () => {
+  assertEquals(
+    p(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["}", 0],
+      ...["i", 42],
       2,
       ...[":", 1, "K", "T"],
       ...[":", 4, "@foo", "i", 42],
     ),
     MarshalHash([], {
       ivars: new Map([["@foo", MarshalInteger(42n)]]),
-      className: "MyHash",
       extenders: ["Mod1"],
       defaultValue: MarshalInteger(42n),
       ruby2Keywords: true,

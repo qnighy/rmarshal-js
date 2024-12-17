@@ -562,12 +562,34 @@ Deno.test("generate generates Hash - with extenders", () => {
   );
 });
 
-Deno.test("generate generates Hash - with all", () => {
+Deno.test("generate generates Hash - with all except ruby2Keywords", () => {
   assertEquals(
     generate(
       MarshalHash([], {
         ivars: new Map([["@foo", MarshalInteger(42n)]]),
         className: "MyHash",
+        extenders: ["Mod1"],
+        defaultValue: MarshalInteger(42n),
+      }),
+    ),
+    seq(
+      "\x04\x08",
+      "I",
+      ...["e:", 4, "Mod1"],
+      ...["C:", 6, "MyHash"],
+      ...["}", 0],
+      ...["i", 42],
+      1,
+      ...[":", 4, "@foo", "i", 42],
+    ),
+  );
+});
+
+Deno.test("generate generates Hash - with all except className", () => {
+  assertEquals(
+    generate(
+      MarshalHash([], {
+        ivars: new Map([["@foo", MarshalInteger(42n)]]),
         extenders: ["Mod1"],
         defaultValue: MarshalInteger(42n),
         ruby2Keywords: true,
@@ -577,7 +599,6 @@ Deno.test("generate generates Hash - with all", () => {
       "\x04\x08",
       "I",
       ...["e:", 4, "Mod1"],
-      ...["C:", 6, "MyHash"],
       ...["}", 0],
       ...["i", 42],
       2,
@@ -1560,7 +1581,7 @@ Deno.test("generate generates links - links same Regexps", () => {
       setupLink(
         [
           MarshalArray([]),
-          MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
+          MarshalRegexp(Uint8Array.from([]), REncoding.US_ASCII),
         ],
         (a, b) => a.elements.push(b, b),
       ),
@@ -1569,7 +1590,7 @@ Deno.test("generate generates links - links same Regexps", () => {
       "\x04\x08",
       "[",
       2,
-      ...["/", 0, "\x00"],
+      ...["I/", 0, "\x00", 1, ":", 1, "E", "F"],
       ...["@", 1],
     ),
   );
@@ -1578,15 +1599,15 @@ Deno.test("generate generates links - links same Regexps", () => {
 Deno.test("generate generates links - unlinks different Regexps", () => {
   assertEquals(
     generate(MarshalArray([
-      MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
-      MarshalRegexp(Uint8Array.from([]), REncoding.ASCII_8BIT),
+      MarshalRegexp(Uint8Array.from([]), REncoding.US_ASCII),
+      MarshalRegexp(Uint8Array.from([]), REncoding.US_ASCII),
     ])),
     seq(
       "\x04\x08",
       "[",
       2,
-      ...["/", 0, "\x00"],
-      ...["/", 0, "\x00"],
+      ...["I/", 0, "\x00", 1, ":", 1, "E", "F"],
+      ...["I/", 0, "\x00", 1, ";", 0, "F"],
     ),
   );
 });
